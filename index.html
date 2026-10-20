@@ -324,7 +324,7 @@ function closeHtml() {
   if (!groups.length) h += '<div class="card empty">すべての品目が在庫切れのため、入力は不要です。「期限切れ数を送信」を押してください。</div>';
   h += groups.map(g => slotHead(g.slot) + '<div class="card" style="padding:4px 16px">' + g.list.map(([it, i]) =>
     `<div class="row"><div class="nm">${esc(g.slot ? baseName(it.name) : it.name)}<div class="small">在庫数 ${it.stock}</div></div>
-     <input type="number" inputmode="numeric" min="0" step="1" placeholder="期限切れ数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>').join('');
+     <input type="number" inputmode="numeric" min="0" step="1" placeholder="個数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>').join('');
   return h;
 }
 function draftIn(el) { const it = S.day.items[+el.dataset.i]; (S.draft[S.date] = S.draft[S.date] || {})[it.name] = el.value; }
