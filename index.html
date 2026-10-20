@@ -319,7 +319,7 @@ function closeHtml() {
   const pend = pendingOut();
   if (pendingClose()) h += '<div class="notice warn">期限切れ数のデータが送信待ちです。</div>';
   else if (d.closed) h += `<div class="notice ok">送信済み ${esc(d.closed.at)}（${esc(d.closed.by)}）。再送信すると上書きされます。</div>`;
-  else h += '<div class="notice info">営業終了時に、期限切れとなる各品目の数を数えて入力してください。在庫切れになった品目は表示されません（期限切れ0として自動で記録されます）。</div>';
+  else h += '<div class="notice info">賞味期限切れ時に、期限切れとなる各品目の数を数えて入力してください。在庫切れになった品目は表示されません（期限切れ0として自動で記録されます）。</div>';
   const groups = groupBySlot(d.items).map(g => ({ slot: g.slot, list: g.list.filter(([it]) => !it.soldOut && !pend.has(it.name)) })).filter(g => g.list.length);
   if (!groups.length) h += '<div class="card empty">すべての品目が在庫切れのため、入力は不要です。「期限切れ数を送信」を押してください。</div>';
   h += groups.map(g => slotHead(g.slot) + '<div class="card" style="padding:4px 16px">' + g.list.map(([it, i]) =>
