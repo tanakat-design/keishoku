@@ -228,7 +228,7 @@ function renderMain() {
   let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}</div></div><button class="link" onclick="logout()">切替</button></div>`;
   if (!s.days.length) { hideBar(); app.innerHTML = h + '<div class="card empty">開催日が設定されていません。管理者に連絡してください。</div>'; return; }
   h += '<div class="chips">' + s.days.map(d => `<button class="chip ${d === S.date ? 'on' : ''}" onclick="pickDate('${d}')">${md(d)}</button>`).join('') + '</div>';
-  h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">本日の締め</button></div>`;
+  h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button></div>`;
   const q = queue().filter(j => j.tid === s.tid).length;
   if (q) h += `<div class="notice warn">未送信が${q}件あります。通信が回復すると自動で送信します。</div>`;
   if (!S.day) {
@@ -243,7 +243,7 @@ function renderMain() {
     const n = S.sel.size;
     showBar(`<button class="btn btn-danger" ${n && !S.busy ? '' : 'disabled'} onclick="submitOut()">${n ? `在庫切れを記録（${n}件）` : '在庫切れの品目を選んでください'}</button>`);
   } else if (S.tab === 'close' && has) {
-    showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="submitClose()">残数を送信</button>`);
+    showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="submitClose()">期限切れ数を送信</button>`);
   } else hideBar();
 }
 function pickDate(d) {
@@ -305,7 +305,7 @@ async function cancelOut(i) {
   S.busy = false; render();
 }
 
-/* --- 本日の締め --- */
+/* --- 期限切れ --- */
 function closeValue(it) {
   const d = S.draft[S.date] || {};
   if (d[it.name] !== undefined) return d[it.name];
@@ -316,12 +316,12 @@ function closeHtml() {
   const d = S.day;
   if (!d.items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
   let h = '';
-  if (pendingClose()) h += '<div class="notice warn">残数データが送信待ちです。</div>';
+  if (pendingClose()) h += '<div class="notice warn">期限切れ数のデータが送信待ちです。</div>';
   else if (d.closed) h += `<div class="notice ok">送信済み ${esc(d.closed.at)}（${esc(d.closed.by)}）。再送信すると上書きされます。</div>`;
-  else h += '<div class="notice info">営業終了時に各品目の残数を数えて入力してください。在庫切れの品目には0が入っています。</div>';
+  else h += '<div class="notice info">営業終了時に、期限切れとなる各品目の数を数えて入力してください。在庫切れの品目には0が入っています。</div>';
   h += groupBySlot(d.items).map(g => slotHead(g.slot) + '<div class="card" style="padding:4px 16px">' + g.list.map(([it, i]) =>
     `<div class="row"><div class="nm">${esc(g.slot ? baseName(it.name) : it.name)}<div class="small">在庫数 ${it.stock}${it.soldOut ? '・在庫切れ ' + esc(it.soldOut.time) : ''}</div></div>
-     <input type="number" inputmode="numeric" min="0" step="1" placeholder="残数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>').join('');
+     <input type="number" inputmode="numeric" min="0" step="1" placeholder="期限切れ数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>').join('');
   return h;
 }
 function draftIn(el) { const it = S.day.items[+el.dataset.i]; (S.draft[S.date] = S.draft[S.date] || {})[it.name] = el.value; }
@@ -330,12 +330,12 @@ async function submitClose() {
   const entries = [], over = [];
   for (const it of S.day.items) {
     const v = String(closeValue(it)).trim();
-    if (!/^\d+$/.test(v)) return toast(`「${it.name}」の残数を入力してください`);
+    if (!/^\d+$/.test(v)) return toast(`「${it.name}」の期限切れ数を入力してください`);
     if (+v > it.stock) over.push(it.name);
     entries.push({ item: it.name, remain: +v });
   }
-  let msg = `${md(S.date)} の残数を送信します。`;
-  if (over.length) msg += '\n\n在庫数より多い残数があります：\n' + over.map(n => '・' + n).join('\n');
+  let msg = `${md(S.date)} の期限切れ数を送信します。`;
+  if (over.length) msg += '\n\n在庫数より多い期限切れ数があります：\n' + over.map(n => '・' + n).join('\n');
   if (S.day.closed) msg += '\n\n送信済みのデータは上書きされます。';
   if (!confirm(msg)) return;
   const s = S.session, date = S.date;
