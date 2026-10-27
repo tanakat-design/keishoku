@@ -533,7 +533,7 @@ function renderAdminEdit() {
     <label>スタッフPIN（数字4〜8桁）</label><input id="fPin" inputmode="numeric" value="${esc(f.staffPin)}">
     <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>有効（スタッフのログイン画面に表示する）</label></div>
     <div class="card"><div style="font-weight:700">軽食シートから取り込み</div>
-    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗・受取時間と、店名の下（B列）の受取方法（「配達」「店舗受け取り」など）・電話番号・「住所：〜」の行をシートから読み取ります。各店舗の「計」の行の下に、品目名の欄へ「賞味期限」、個数の欄へ時刻（例：15:00、日をまたぐ場合は 10/31 9:00、その日の終わりまでなら「当日中」）を書くと賞味期限も取り込みます。一部の品目だけ期限が違う場合は、品目名の欄へ「賞味期限（高菜）」のように品目名を付けた行を追加します。同様に「受取」行で店舗ごとの受取時間を上書きできます。</div>
+    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗・受取時間と、店名の下（B列）の受取方法（「配達」「店舗受け取り」など）・電話番号・「住所：〜」の行をシートから読み取ります。各店舗の「計」の行の下に、品目名の欄へ「賞味期限」、個数の欄へ時刻（例：15:00、日をまたぐ場合は 10/31 9:00、その日の終わりまでなら「当日中」）を書くと賞味期限も取り込みます。一部の品目だけ期限が違う場合は、品目名の欄へ「賞味期限（高菜）」のように品目名を付けた行を追加します。日付の左に「受け取り時間」（2行目に初日・朝・夜・最終日などの見出し）と「賞味期限」の列がある形式にも対応します。店舗の行の受取時間・賞味期限（8時間・当日中など）を読み取り、賞味期限の列の2行目以降に「クリームパンのみ当日中」と書くとその品目だけ別の期限になります。「Total」の行より下は読み取りません。同様に「受取」行で店舗ごとの受取時間を上書きできます。</div>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="fSplit" checked>受取時間帯ごとに分ける（例：めんまよ（10:30）／めんまよ（18:00））。外すと同じ日の受取枠を合算します。</label>
     <label>シートに賞味期限がない受取の賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
     <label class="btn" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;color:#fff;font-size:16px;font-weight:600">CSVファイルを選んで取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this)"></label>
@@ -648,10 +648,20 @@ function importKeishoku(text, today, split, expH) {
   if (hi < 0) throw new Error('日付の行（例：10/29）が見つかりません');
   const hdr = rows[hi], times = rows[hi + 1] || [];
   const width = Math.max(...rows.map(r => r.length));
+  const firstDate = hdr.findIndex(isMd);
+  // 日付より左の列：受取時間の列（2行目の「初日／朝／夜／最終日」などの見出し）と店舗ごとの賞味期限の列
+  const labelCol = {}; let expCol = -1;
+  for (let c = 0; c < firstDate; c++) {
+    const lb = String(times[c] || '').replace(/\s+/g, '');
+    if (lb && !parseHM(lb)) labelCol[lb] = c;
+    if (/賞味|消費|期限/.test(hdr[c] || '')) expCol = c;
+  }
+  // 受取枠：日付の列、2行目に時刻がある列、2行目に見出し（朝・夜など）がある列
   const slots = []; let cur = null;
-  for (let c = 0; c < width; c++) {
+  for (let c = firstDate; c < width; c++) {
     if (isMd(hdr[c])) cur = hdr[c];
-    if (cur && (isMd(hdr[c]) || parseHM(times[c]))) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(times[c]) });
+    const lb = String(times[c] || '').replace(/\s+/g, '');
+    if (cur && (isMd(hdr[c]) || lb)) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(lb), label: parseHM(lb) ? '' : lb });
   }
   const shortStore = s => s.replace(/[（(][^）)]*[）)]/g, '').trim() || s;
   const inParen = s => { const m = s.match(/[（(]([^）)]*)[）)]/); return m && !/新規/.test(m[1]) ? m[1] : shortStore(s); };
@@ -660,12 +670,24 @@ function importKeishoku(text, today, split, expH) {
   const expTargets = s => { const m = s.match(/^(?:賞味|消費)?期限[（(:：](.+?)[）)]?$/); return m ? m[1].split(/[、,・\/／]/).map(x => x.trim()).filter(Boolean) : null; };
   // 店舗×受取枠（列）ごとに集計する
   const cells = new Map(); let store = null; const bad = [];
+  const stInfo = {}; // 店舗ごとの受取時間（見出し→時刻）・賞味期限（G列など）・品目別の期限メモ
   const info = {}; // 店舗ごとの受取方法・住所・電話（店名の下のB列）
   const isTel = t => /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/.test(t.replace(/[\s（）()]/g, ''));
-  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) cells.set(k, { rawStore: st, date: s.date, recv: s.time, expRaw: '', itemExp: {}, items: [] }); return cells.get(k); };
+  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) { const si = stInfo[st] || {}; cells.set(k, { rawStore: st, date: s.date, recv: s.time || (si.times || {})[s.label] || '', label: s.label, expRaw: '', itemExp: {}, items: [] }); } return cells.get(k); };
+  const noteRe = /^(.+?)(?:のみ|だけ)?(?:は|[:：]|\s)*(当日中?|本日中|その日中|\d+(?:\.\d+)?\s*時間|(?:\d{1,2}[\/／]\d{1,2}\s+)?\d{1,2}[:：]\d{2}(?::\d{2})?)$/;
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
-    if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) store = r[1];
+    if (r.some(c => /^total$/i.test(c))) break; // 「Total」行より下はメモ欄として読まない
+    if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) {
+      store = r[1];
+      const t = {}; Object.entries(labelCol).forEach(([lb, c]) => { const hm = parseHM(r[c]); if (hm) t[lb] = hm; });
+      stInfo[store] = { times: t, exp: expCol >= 0 ? String(r[expCol] || '').trim() : '', notes: [] };
+    } else if (store && expCol >= 0 && String(r[expCol] || '').trim()) {
+      // 2行目以降の賞味期限欄：「クリームパンのみ当日中」など品目別の期限
+      const m = String(r[expCol]).replace(/\u3000/g, ' ').trim().match(noteRe);
+      if (m) stInfo[store].notes.push({ names: m[1].split(/[、,・\/／]/).map(x => x.replace(/\s+/g, '')).filter(Boolean), raw: m[2] });
+      else bad.push(shortStore(store) + ' 賞味期限欄「' + r[expCol] + '」');
+    }
     if (!store) continue;
     const b = (r[1] || '').replace(/\u3000/g, ' ').trim();
     if (b && b !== store) {
@@ -687,19 +709,27 @@ function importKeishoku(text, today, split, expH) {
       const nm = (r[s.col] || '').trim();
       cellOf(store, s).items.push({ raw: nm.replace(/\s+/g, ''), name: nm.length <= 2 ? inParen(store) + ' ' + nm : nm, stock: +qty });
     });
-    if (r.some(c => /^total$/i.test(c))) store = null;
   }
+  // 受取時間が空欄の店舗（配達など）は、同じ見出し（朝・夜など）で最も多い他店舗の時刻を仮に使う
+  const labelDef = {};
+  Object.keys(labelCol).forEach(lb => { const cnt = {}; Object.values(stInfo).forEach(x => { const t = x.times[lb]; if (t) cnt[t] = (cnt[t] || 0) + 1; }); const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || toMin(a) - toMin(b))[0]; if (best) labelDef[lb] = best; });
+  let recvAssumed = 0; const assumedStores = new Set();
+  cells.forEach(c => { if (!c.recv && c.label && labelDef[c.label] && c.items.length) { c.recv = labelDef[c.label]; recvAssumed++; assumedStores.add(shortStore(c.rawStore)); } });
   const h = Number(expH);
   const days = {}; let expFromSheet = 0, expFromHours = 0, expBlank = 0, expItem = 0;
   cells.forEach(c => {
     if (!c.items.length) return;
     let exp = '';
+    const si = stInfo[c.rawStore] || {};
+    if (!c.expRaw && si.exp) c.expRaw = si.exp; // 店舗の賞味期限欄（「8時間」「当日中」など）
+    if (c.expRaw && !c.recv && /時間/.test(c.expRaw)) { bad.push(md(c.date) + ' ' + shortStore(c.rawStore) + ' 受取時間がないため賞味期限「' + c.expRaw + '」を計算できません'); c.expRaw = ''; }
     if (c.expRaw) { exp = parseExpCell(c.expRaw, c.date, c.recv, today); if (exp == null) { bad.push(md(c.date) + ' ' + shortStore(c.rawStore) + ' 賞味期限「' + c.expRaw + '」'); exp = ''; } else expFromSheet++; }
     if (!exp && c.recv && h > 0) { exp = expAfter(c.date, c.recv, h); expFromHours++; }
     if (!exp) expBlank++;
     const groups = days[c.date] = days[c.date] || [];
     // 品目別の賞味期限（「賞味期限（高菜）」行）
     const own = {};
+    (si.notes || []).forEach(n => n.names.forEach(k => { if (c.itemExp[k] === undefined && c.items.some(it => it.raw === k || it.raw.includes(k))) c.itemExp[k] = n.raw; }));
     Object.entries(c.itemExp).forEach(([k, raw]) => {
       const hit = c.items.filter(it => it.raw === k || it.raw.includes(k));
       if (!hit.length) { bad.push(md(c.date) + ' ' + shortStore(c.rawStore) + ' 賞味期限の品目「' + k + '」が見つかりません'); return; }
@@ -722,7 +752,7 @@ function importKeishoku(text, today, split, expH) {
   const dates = Object.keys(days).sort();
   if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
   const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: split ? g.recv : '', exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, items: g.items })) }));
-  result.info = { expFromSheet, expFromHours, expBlank, expItem, bad };
+  result.info = { expFromSheet, expFromHours, expBlank, expItem, recvAssumed, assumedStores: [...assumedStores], labelDef, bad };
   return result;
 }
 async function importFile(input) {
@@ -746,7 +776,7 @@ function importSheet() {
   const n = days.reduce((a, d) => a + cntD(d), 0);
   const inf = days.info;
   let msg = `${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.groups.length + '受取・' + cntD(d) + '品目').join('\n');
-  msg += `\n\n賞味期限：シートから${inf.expFromSheet}受取` + (inf.expFromHours ? `／受取から${val('fExpH')}時間後で${inf.expFromHours}受取` : '') + (inf.expBlank ? `／未設定${inf.expBlank}受取` : '') + (inf.expItem ? `／品目別${inf.expItem}品目` : '');
+  msg += `\n\n賞味期限：シートから${inf.expFromSheet}受取` + (inf.expFromHours ? `／受取から${val('fExpH')}時間後で${inf.expFromHours}受取` : '') + (inf.expBlank ? `／未設定${inf.expBlank}受取` : '') + (inf.expItem ? `／品目別${inf.expItem}品目` : '') + (inf.recvAssumed ? `\n受取時間が空欄の店舗（${inf.assumedStores.join('、')}）は、同じ枠の他店舗の時刻（${Object.entries(inf.labelDef).map(([k, v]) => k + ' ' + v).join('、')}）を仮に設定しました。取り込み後に確認してください。` : '');
   if (inf.bad.length) msg += '\n\n読み取れなかった値（空欄として扱います）：\n' + inf.bad.slice(0, 8).map(b => '・' + b).join('\n') + (inf.bad.length > 8 ? '\n…ほか' + (inf.bad.length - 8) + '件' : '');
   if (!confirm(msg + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
   S.form.days = days.map(d => ({ date: d.date, groups: d.groups }));
