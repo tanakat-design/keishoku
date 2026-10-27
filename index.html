@@ -92,10 +92,9 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .sw{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;white-space:nowrap;margin:0}
 .sw input{width:20px;height:20px;margin:0}
 .hiddenT{background:#f3f4f6;color:#6b7280}
-.lrow{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:8px}
-.lrow label{margin-top:0;font-size:13px}
-.lrow label .small{font-size:11px;font-weight:400}
-.lrow input{min-width:0;padding:8px 10px}
+.lrow{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.lrow label{margin:0;font-size:13px;font-weight:700;width:6.5em;flex:none}
+.lrow input{flex:1;min-width:0;width:auto;box-sizing:border-box;padding:8px 10px;margin:0;-webkit-appearance:none;appearance:none;min-height:40px;background:#fff}
 .rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
 .rcv.past{opacity:.6}
 </style>
@@ -347,9 +346,9 @@ function recordHtml() {
 }
 /** 品目を選択中に下部バーへ表示：すぐに押せなかった場合の在庫切れ時刻と備考 */
 function lateHtml() {
-  return `<div class="lrow"><div><label>在庫切れ時刻<span class="small">（後から記録する場合）</span></label><input id="rcTime" type="time" value="${esc(S.outAt || '')}" oninput="S.outAt=this.value"></div>
-    <div><label>備考</label><input id="rcNote" type="text" maxlength="200" placeholder="任意" value="${esc(S.outNote || '')}" oninput="S.outNote=this.value"></div></div>
-    <div class="small" style="margin:4px 0 8px">時刻が空欄なら今の時刻で記録します。</div>`;
+  return `<div class="lrow"><label for="rcTime">在庫切れ時刻</label><input id="rcTime" type="time" value="${esc(S.outAt || '')}" oninput="S.outAt=this.value"></div>
+    <div class="lrow"><label for="rcNote">備考</label><input id="rcNote" type="text" maxlength="200" placeholder="任意" value="${esc(S.outNote || '')}" oninput="S.outNote=this.value"></div>
+    <div class="small" style="margin:2px 0 8px">すぐに押せなかった場合のみ時刻を入力。空欄なら今の時刻で記録します。</div>`;
 }
 function toggle(i) { const n = S.day.items[i].name; S.sel.has(n) ? S.sel.delete(n) : S.sel.add(n); render(); }
 async function submitOut() {
