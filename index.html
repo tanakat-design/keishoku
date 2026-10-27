@@ -92,6 +92,10 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .sw{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;white-space:nowrap;margin:0}
 .sw input{width:20px;height:20px;margin:0}
 .hiddenT{background:#f3f4f6;color:#6b7280}
+.lrow{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:8px}
+.lrow label{margin-top:0;font-size:13px}
+.lrow label .small{font-size:11px;font-weight:400}
+.lrow input{min-width:0;padding:8px 10px}
 .rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
 .rcv.past{opacity:.6}
 </style>
@@ -226,8 +230,8 @@ function render() {
   if (S.view === 'error') { hideBar(); app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card"><div class="notice warn">${esc(S.error)}</div><button class="btn" onclick="init()">再読み込み</button></div>`; return; }
   ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit })[S.view]();
 }
-function hideBar() { bar.classList.add('hidden'); }
-function showBar(html) { barIn.innerHTML = html; bar.classList.remove('hidden'); }
+function hideBar() { bar.classList.add('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = ''; }
+function showBar(html) { barIn.innerHTML = html; bar.classList.remove('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = (bar.offsetHeight + 24) + 'px'; }
 
 /* --- ログイン --- */
 function renderLogin() {
@@ -274,7 +278,7 @@ function renderMain() {
   const has = S.day.items.length;
   if (S.tab === 'record' && has) {
     const n = S.sel.size;
-    showBar(`<button class="btn btn-danger" ${n && !S.busy ? '' : 'disabled'} onclick="submitOut()">${n ? `在庫切れを記録（${n}件）` : '在庫切れの品目を選んでください'}</button>`);
+    showBar((n ? lateHtml() : '') + `<button class="btn btn-danger" ${n && !S.busy ? '' : 'disabled'} onclick="submitOut()">${n ? `在庫切れを記録（${n}件）` : '在庫切れの品目を選んでください'}</button>`);
   } else if (S.tab === 'close' && has) {
     showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="submitClose()">期限切れ数を送信</button>`);
   } else hideBar();
@@ -335,18 +339,26 @@ function recordHtml() {
   return (due ? `<div class="notice warn">賞味期限を過ぎた受取が${due}件あります。期限切れ数を入力してください。<button class="link" onclick="pickTab('close')">期限切れへ</button></div>` : '') +
     groupBySlot(items).map(g => slotHead(g.slot) + '<div class="grid">' + g.list.map(([it, i]) => {
     const nm = esc(baseName(it.name));
-    if (it.soldOut) return `<div class="item out"><div>${nm}</div><div class="meta">在庫切れ ${esc(it.soldOut.time)}（${esc(it.soldOut.by)}）</div><button class="cancel" onclick="cancelOut(${i})">取消</button></div>`;
+    if (it.soldOut) { const o = it.soldOut; return `<div class="item out"><div>${nm}</div><div class="meta">在庫切れ ${esc(o.time)}（${esc(o.by)}${o.late ? '・' + esc(o.at) + 'に後から記録' : ''}）</div>${o.note ? `<div class="meta">備考：${esc(o.note)}</div>` : ''}<button class="cancel" onclick="cancelOut(${i})">取消</button></div>`; }
     if (pend.has(it.name)) return `<div class="item out pending"><div>${nm}</div><div class="meta">在庫切れ（送信待ち）</div></div>`;
     const on = S.sel.has(it.name);
     return `<button class="item ${on ? 'sel' : ''}" onclick="toggle(${i})"><div>${nm}</div><div class="meta">${on ? '✓ 選択中' : '在庫数 ' + it.stock}</div></button>`;
   }).join('') + '</div>').join('');
 }
+/** 品目を選択中に下部バーへ表示：すぐに押せなかった場合の在庫切れ時刻と備考 */
+function lateHtml() {
+  return `<div class="lrow"><div><label>在庫切れ時刻<span class="small">（後から記録する場合）</span></label><input id="rcTime" type="time" value="${esc(S.outAt || '')}" oninput="S.outAt=this.value"></div>
+    <div><label>備考</label><input id="rcNote" type="text" maxlength="200" placeholder="任意" value="${esc(S.outNote || '')}" oninput="S.outNote=this.value"></div></div>
+    <div class="small" style="margin:4px 0 8px">時刻が空欄なら今の時刻で記録します。</div>`;
+}
 function toggle(i) { const n = S.day.items[i].name; S.sel.has(n) ? S.sel.delete(n) : S.sel.add(n); render(); }
 async function submitOut() {
   const names = [...S.sel]; if (!names.length || S.busy) return;
-  if (!confirm('以下を在庫切れとして記録します。\n\n' + names.map(n => '・' + n).join('\n'))) return;
+  const outAt = (S.outAt || '').trim(), note = (S.outNote || '').trim();
+  if (outAt && md(S.date) === md(S.today)) { const [h, m] = outAt.split(':').map(Number), n = new Date(); if (h >= 5 && h * 60 + m > n.getHours() * 60 + n.getMinutes() + 5) return toast('在庫切れ時刻が今より後になっています'); }
+  if (!confirm('以下を在庫切れとして記録します。\n\n' + names.map(n => '・' + n).join('\n') + '\n\n在庫切れ時刻：' + (outAt || '今') + (note ? '\n備考：' + note : ''))) return;
   const s = S.session;
-  const args = [s.tid, s.pin, S.date, names, s.staff, uid(), Date.now()];
+  const args = [s.tid, s.pin, S.date, names, s.staff, uid(), Date.now(), outAt, note];
   S.busy = true; render();
   try {
     S.day = await call('markSoldOut', ...args); S.loadedAt = new Date(); LS.set(dayKey(s.tid, S.date), S.day);
@@ -355,7 +367,7 @@ async function submitOut() {
     if (isNetErr(e)) { enqueue({ fn: 'markSoldOut', args, kind: 'out', tid: s.tid, date: S.date, names }); toast('通信できないため端末に保存しました。回復後に自動送信します'); }
     else toast(errMsg(e));
   }
-  S.sel.clear(); S.busy = false; render();
+  S.sel.clear(); S.outAt = ''; S.outNote = ''; S.busy = false; render();
 }
 async function cancelOut(i) {
   const it = S.day.items[i];
