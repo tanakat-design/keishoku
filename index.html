@@ -484,9 +484,9 @@ function renderAdminEdit() {
     <label>スタッフPIN（数字4〜8桁）</label><input id="fPin" inputmode="numeric" value="${esc(f.staffPin)}">
     <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>有効（スタッフのログイン画面に表示する）</label></div>
     <div class="card"><div style="font-weight:700">軽食シートから取り込み</div>
-    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗と受取時間はシートから読み取ります。</div>
+    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗と受取時間はシートから読み取ります。各店舗の「計」の行の下に、品目名の欄へ「賞味期限」、個数の欄へ時刻（例：15:00、日をまたぐ場合は 10/31 9:00）を書くと賞味期限も取り込みます。同様に「受取」行で店舗ごとの受取時間を上書きできます。</div>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="fSplit" checked>受取時間帯ごとに分ける（例：めんまよ（10:30）／めんまよ（18:00））。外すと同じ日の受取枠を合算します。</label>
-    <label>賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
+    <label>シートに賞味期限がない受取の賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
     <label class="btn" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;color:#fff;font-size:16px;font-weight:600">CSVファイルを選んで取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this)"></label>
     <textarea id="fImport" rows="3" placeholder="またはここに貼り付け"></textarea>
     <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet()">貼り付けた内容を取り込む</button></div>
@@ -568,6 +568,25 @@ function mdToIso(md, today) {
   if (new Date(y, m - 1, d) - base < -120 * 864e5) y++;
   return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
 }
+/* 時刻・日時の読み取り（CSVの「9:45」「15:00:00」「10/31 9:00」「2026/10/31 9:00」など） */
+function parseHM(v) { const m = String(v || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/); return m && +m[1] < 24 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; }
+function parseExpCell(v, date, recv, today) {
+  const t = String(v || '').trim().replace(/／/g, '/').replace(/：/g, ':');
+  let m = t.match(/^(?:(\d{4})[\/-])?(\d{1,2})[\/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) {
+    const d = m[1] ? m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0') : mdToIso(m[2] + '/' + m[3], today);
+    return d + 'T' + m[4].padStart(2, '0') + ':' + m[5];
+  }
+  const hm = parseHM(t);
+  if (hm) { const d = recv && toMin(hm) < toMin(recv) ? addDays(date, 1) : date; return d + 'T' + hm; } // 受取より前の時刻は翌日
+  m = t.match(/^\+?(\d+(?:\.\d+)?)\s*(?:h|時間)$/i);
+  if (m && recv) return expAfter(date, recv, +m[1]);
+  return null;
+}
+function expAfter(date, recv, h) {
+  const d = new Date(date + 'T' + recv + ':00'); d.setMinutes(d.getMinutes() + Math.round(h * 60));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d);
+}
 function importKeishoku(text, today, split, expH) {
   const rows = parseTable(text);
   const isMd = s => /^\d{1,2}\/\d{1,2}$/.test(s || '');
@@ -578,36 +597,54 @@ function importKeishoku(text, today, split, expH) {
   const slots = []; let cur = null;
   for (let c = 0; c < width; c++) {
     if (isMd(hdr[c])) cur = hdr[c];
-    if (cur && (isMd(hdr[c]) || /^\d{1,2}:\d{2}$/.test(times[c] || ''))) slots.push({ col: c, date: mdToIso(cur, today), time: times[c] || '' });
+    if (cur && (isMd(hdr[c]) || parseHM(times[c]))) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(times[c]) });
   }
   const shortStore = s => s.replace(/[（(][^）)]*[）)]/g, '').trim() || s;
   const inParen = s => { const m = s.match(/[（(]([^）)]*)[）)]/); return m && !/新規/.test(m[1]) ? m[1] : shortStore(s); };
-  const days = {}; let store = null;
+  const isRecvLabel = s => /^受取(時間|時刻)?$|^受け取り(時間)?$/.test(s);
+  const isExpLabel = s => /^(賞味|消費)?期限$/.test(s);
+  // 店舗×受取枠（列）ごとに集計する
+  const cells = new Map(); let store = null; const bad = [];
+  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) cells.set(k, { rawStore: st, date: s.date, recv: s.time, expRaw: '', items: [] }); return cells.get(k); };
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
     if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) store = r[1];
     if (!store) continue;
     slots.forEach(s => {
-      const name = r[s.col] || '', qty = String(r[s.col + 1] || '').replace(/,/g, '');
-      if (!name || name === '計' || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
-      const recv = split ? s.time : '';
-      const groups = days[s.date] = days[s.date] || [];
-      let g = groups.find(x => x.rawStore === store && x.recv === recv);
-      if (!g) groups.push(g = { rawStore: store, store: shortStore(store), recv, exp: '', items: [] });
-      const nm = name.length <= 2 ? inParen(store) + ' ' + name : name;
-      const it = g.items.find(x => x.name === nm);
-      if (it) it.stock += +qty; else g.items.push({ name: nm, stock: +qty });
+      const name = (r[s.col] || '').replace(/\s+/g, ''), raw = String(r[s.col + 1] || '').trim();
+      if (!name) return;
+      if (isRecvLabel(name)) { if (!raw) return; const hm = parseHM(raw); if (hm) cellOf(store, s).recv = hm; else bad.push(md(s.date) + ' ' + shortStore(store) + ' 受取「' + raw + '」'); return; }
+      if (isExpLabel(name)) { if (raw) cellOf(store, s).expRaw = raw; return; }
+      const qty = raw.replace(/,/g, '');
+      if (name === '計' || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
+      const nm = (r[s.col] || '').trim();
+      cellOf(store, s).items.push({ name: nm.length <= 2 ? inParen(store) + ' ' + nm : nm, stock: +qty });
     });
     if (r.some(c => /^total$/i.test(c))) store = null;
   }
+  const h = Number(expH);
+  const days = {}; let expFromSheet = 0, expFromHours = 0, expBlank = 0;
+  cells.forEach(c => {
+    if (!c.items.length) return;
+    let exp = '';
+    if (c.expRaw) { exp = parseExpCell(c.expRaw, c.date, c.recv, today); if (exp == null) { bad.push(md(c.date) + ' ' + shortStore(c.rawStore) + ' 賞味期限「' + c.expRaw + '」'); exp = ''; } else expFromSheet++; }
+    if (!exp && c.recv && h > 0) { exp = expAfter(c.date, c.recv, h); expFromHours++; }
+    if (!exp) expBlank++;
+    const groups = days[c.date] = days[c.date] || [];
+    // 時間帯を分ける：店舗×受取時間でまとめる／合算：店舗でまとめ、受取時間・賞味期限は最も早いもの
+    let g = groups.find(x => x.rawStore === c.rawStore && (!split || x.recv === c.recv));
+    if (!g) groups.push(g = { rawStore: c.rawStore, store: shortStore(c.rawStore), recv: c.recv, exp, items: [] });
+    else {
+      if (c.recv && (!g.recv || toMin(c.recv) < toMin(g.recv))) g.recv = c.recv;
+      if (exp && (!g.exp || exp < g.exp)) g.exp = exp;
+    }
+    c.items.forEach(it => { const e = g.items.find(x => x.name === it.name); if (e) e.stock += it.stock; else g.items.push({ ...it }); });
+  });
   const dates = Object.keys(days).sort();
   if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
-  const h = Number(expH);
-  return dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => {
-    let exp = '';
-    if (g.recv && h > 0) { const d = new Date(date + 'T' + g.recv.padStart(5, '0') + ':00'); d.setMinutes(d.getMinutes() + Math.round(h * 60)); exp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d); }
-    return { store: g.store, recv: g.recv, exp, items: g.items };
-  }) }));
+  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: split ? g.recv : '', exp: g.exp, items: g.items })) }));
+  result.info = { expFromSheet, expFromHours, expBlank, bad };
+  return result;
 }
 async function importFile(input) {
   const f = input.files && input.files[0];
@@ -628,8 +665,12 @@ function importSheet() {
   try { days = importKeishoku(text, S.today, document.getElementById('fSplit').checked, val('fExpH')); } catch (e) { return toast(errMsg(e)); }
   const cntD = d => d.groups.reduce((a, g) => a + g.items.length, 0);
   const n = days.reduce((a, d) => a + cntD(d), 0);
-  if (!confirm(`${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.groups.length + '受取・' + cntD(d) + '品目').join('\n') + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
-  S.form.days = days;
+  const inf = days.info;
+  let msg = `${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.groups.length + '受取・' + cntD(d) + '品目').join('\n');
+  msg += `\n\n賞味期限：シートから${inf.expFromSheet}受取` + (inf.expFromHours ? `／受取から${val('fExpH')}時間後で${inf.expFromHours}受取` : '') + (inf.expBlank ? `／未設定${inf.expBlank}受取` : '');
+  if (inf.bad.length) msg += '\n\n読み取れなかった値（空欄として扱います）：\n' + inf.bad.slice(0, 8).map(b => '・' + b).join('\n') + (inf.bad.length > 8 ? '\n…ほか' + (inf.bad.length - 8) + '件' : '');
+  if (!confirm(msg + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
+  S.form.days = days.map(d => ({ date: d.date, groups: d.groups }));
   render();
   toast('取り込みました。内容を確認して保存してください');
 }
