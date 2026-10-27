@@ -75,6 +75,749 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .card.due{border:2px solid var(--danger)}
 .gsub{font-size:13px;color:var(--sub);margin:-4px 0 8px}
 .notice .link{padding:0;margin-left:4px}
+.tab{font-size:15px;padding:10px 4px}
+.rcv{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.rcv .top{display:flex;align-items:baseline;gap:10px}
+.rcv .tm{font-size:20px;font-weight:700;flex:0 0 auto}
+.rcv .st{font-weight:700;font-size:16px}
+.rcv .mth{display:inline-block;font-size:12px;font-weight:700;border-radius:10px;padding:2px 8px;margin-top:6px;background:var(--accent-weak);color:#174ea6}
+.rcv .mth.dlv{background:var(--muted);color:var(--text)}
+.rcv .note{font-size:13px;color:var(--sub);margin-left:6px}
+.rcv .info{font-size:14px;margin-top:8px;line-height:1.6}
+.rcv .info a{color:var(--accent);font-weight:600;text-decoration:none;margin-left:6px}
+.rcv .its{font-size:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);line-height:1.7}
+.rcv .its span{display:inline-block;margin-right:12px}
+.rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
+.rcv.past{opacity:.6}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="bar hidden" id="bar"><div class="in" id="barIn"></div></div>
+<div id="toast"></div>
+<script>
+/* ===== 共通 ===== */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+const S = { view: 'loading', error: '', tournaments: [], today: '', session: null, date: null, tab: 'record',
+  day: null, loading: false, loadedAt: null, sel: new Set(), draft: {}, busy: false, admin: null, form: null };
+const app = document.getElementById('app');
+const bar = document.getElementById('bar');
+const barIn = document.getElementById('barIn');
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2800); }
+// Apps Script の公開URL（外部に置いた画面からはここへ送信する）
+const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
+async function call(fn, ...args) {
+  if (window.google && google.script && google.script.run) {
+    return new Promise((res, rej) => { google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args); });
+  }
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) });
+  if (!r.ok) throw new Error('サーバーエラー（' + r.status + '）');
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error);
+  return j.result;
+}
+function errMsg(e) { return e && e.message ? e.message : String(e); }
+function isNetErr(e) { return !navigator.onLine || /network|failed to fetch|ネットワーク|接続/i.test(errMsg(e)); }
+function netMsg(e) { return isNetErr(e) ? '通信できません。電波を確認してください' : errMsg(e); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function md(ds) { if (!ds) return ''; const [y, m, d] = ds.split('-').map(Number); return m + '/' + d + '(' + '日月火水木金土'[new Date(y, m - 1, d).getDay()] + ')'; }
+function hhmm(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function addDays(ds, n) { const [y, m, d] = ds.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
+function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function dayKey(tid, date) { return 'kDay:' + tid + ':' + date; }
+
+/* ===== 未送信キュー（電波が弱いときは端末に保存して自動再送） ===== */
+function queue() { return LS.get('kQueue', []); }
+function setQueue(q) { LS.set('kQueue', q); }
+function enqueue(job) { const q = queue(); q.push(job); setQueue(q); }
+function pendingOut() {
+  const set = new Set(); const s = S.session; if (!s) return set;
+  queue().forEach(j => { if (j.kind === 'out' && j.tid === s.tid && j.date === S.date) j.names.forEach(n => set.add(n)); });
+  return set;
+}
+function pendingClose() { const s = S.session; return !!s && queue().some(j => j.kind === 'close' && j.tid === s.tid && j.date === S.date); }
+async function flush() {
+  if (flush.running || !queue().length) return;
+  flush.running = true;
+  let changed = false;
+  try {
+    let q = queue();
+    while (q.length) {
+      try { await call(q[0].fn, ...q[0].args); }
+      catch (e) { if (isNetErr(e)) break; toast('未送信データを送信できませんでした：' + errMsg(e)); }
+      q = queue(); q.shift(); setQueue(q); changed = true;
+    }
+  } finally { flush.running = false; }
+  if (changed) {
+    if (!queue().length) toast('未送信データを送信しました');
+    if (S.view === 'main') loadDay(true);
+  }
+}
+window.addEventListener('online', flush);
+setInterval(flush, 20000);
+
+/* ===== 起動 ===== */
+async function init() {
+  S.view = 'loading'; render();
+  const saved = LS.get('kSession', null);
+  try { const r = await call('getTournaments'); S.tournaments = r.list; S.today = r.today; }
+  catch (e) {
+    if (saved && isNetErr(e) && LS.get('kSessInfo', null)) return enterOffline(saved);
+    S.view = 'error'; S.error = netMsg(e); return render();
+  }
+  if (saved) {
+    try { await login(saved.tid, saved.pin, saved.staff); flush(); return; }
+    catch (e) { if (isNetErr(e) && LS.get('kSessInfo', null)) return enterOffline(saved); LS.del('kSession'); }
+  }
+  S.view = 'login'; render();
+}
+function enterOffline(saved) {
+  const info = LS.get('kSessInfo');
+  S.session = { tid: saved.tid, pin: saved.pin, staff: saved.staff, name: info.name, days: info.days };
+  S.date = info.date || info.days[0] || null;
+  S.day = S.date ? LS.get(dayKey(saved.tid, S.date), null) : null;
+  S.view = 'main'; render();
+  toast('オフラインです。保存済みのデータで表示しています');
+}
+async function login(tid, pin, staff) {
+  const r = await call('staffLogin', tid, pin);
+  S.session = { tid, pin, staff, name: r.name, days: r.days };
+  S.today = r.today;
+  S.date = r.days.includes(r.today) ? r.today : (r.days.find(d => d >= r.today) || r.days[r.days.length - 1] || null);
+  S.tab = 'record'; S.sel = new Set(); S.draft = {};
+  S.day = S.date ? LS.get(dayKey(tid, S.date), null) : null;
+  LS.set('kSession', { tid, pin, staff }); LS.set('kStaffName', staff);
+  LS.set('kSessInfo', { name: r.name, days: r.days, date: S.date });
+  S.view = 'main';
+  await loadDay();
+}
+async function loadDay(quiet) {
+  const s = S.session;
+  if (!S.date) { S.day = null; return render(); }
+  const date = S.date;
+  S.loading = true;
+  if (!quiet) render();
+  try {
+    const r = await call('getDayState', s.tid, s.pin, date);
+    if (date !== S.date) return; // 読み込み中に日付が切り替わった
+    S.day = r; S.loadedAt = new Date(); LS.set(dayKey(s.tid, date), r);
+  } catch (e) {
+    if (!quiet) toast(netMsg(e));
+  } finally { S.loading = false; }
+  if (S.day) S.day.items.forEach(it => { if (it.soldOut) S.sel.delete(it.name); });
+  render();
+}
+
+/* ===== 描画 ===== */
+function render() {
+  if (S.view === 'loading') { hideBar(); app.innerHTML = '<div class="empty">読み込み中…</div>'; return; }
+  if (S.view === 'error') { hideBar(); app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card"><div class="notice warn">${esc(S.error)}</div><button class="btn" onclick="init()">再読み込み</button></div>`; return; }
+  ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit })[S.view]();
+}
+function hideBar() { bar.classList.add('hidden'); }
+function showBar(html) { barIn.innerHTML = html; bar.classList.remove('hidden'); }
+
+/* --- ログイン --- */
+function renderLogin() {
+  hideBar();
+  const opts = S.tournaments.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card">
+    ${S.tournaments.length ? '' : '<div class="notice warn">有効な大会がありません。管理者メニューから大会を登録してください。</div>'}
+    <label>大会</label><select id="lgT">${opts}</select>
+    <label>スタッフPIN</label><input id="lgP" type="password" inputmode="numeric" autocomplete="off">
+    <label>名前</label><input id="lgN" value="${esc(LS.get('kStaffName', ''))}" placeholder="例：佐藤">
+    <button class="btn" style="margin-top:16px" onclick="doLogin()" ${S.tournaments.length ? '' : 'disabled'}>開始</button></div>
+    <div style="text-align:center"><button class="link" onclick="openAdmin()">管理者メニュー</button></div>`;
+}
+async function doLogin() {
+  const tid = val('lgT'), pin = val('lgP').trim(), staff = val('lgN').trim();
+  if (!pin) return toast('PINを入力してください');
+  if (!staff) return toast('名前を入力してください');
+  try { await login(tid, pin, staff); } catch (e) { toast(netMsg(e)); }
+}
+function logout() {
+  const q = queue().length;
+  if (!confirm(q ? `未送信のデータが${q}件あります。切り替えても自動送信は続きます。切り替えますか？` : '大会・入力者を切り替えますか？')) return;
+  LS.del('kSession'); LS.del('kSessInfo');
+  S.session = null; S.day = null;
+  backToLogin();
+}
+
+/* --- メイン --- */
+function renderMain() {
+  const s = S.session;
+  let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}</div></div><button class="link" onclick="logout()">切替</button></div>`;
+  if (!s.days.length) { hideBar(); app.innerHTML = h + '<div class="card empty">開催日が設定されていません。管理者に連絡してください。</div>'; return; }
+  h += '<div class="chips">' + s.days.map(d => `<button class="chip ${d === S.date ? 'on' : ''}" onclick="pickDate('${d}')">${md(d)}</button>`).join('') + '</div>';
+  h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button><button class="tab ${S.tab === 'recv' ? 'on' : ''}" onclick="pickTab('recv')">受取</button></div>`;
+  const q = queue().filter(j => j.tid === s.tid).length;
+  if (q) h += `<div class="notice warn">未送信が${q}件あります。通信が回復すると自動で送信します。</div>`;
+  if (!S.day) {
+    h += S.loading ? '<div class="card empty">読み込み中…</div>' : '<div class="card empty">データを取得できません。電波を確認して「更新」を押してください。<br><button class="link" onclick="loadDay()">更新</button></div>';
+    hideBar(); app.innerHTML = h; return;
+  }
+  h += S.tab === 'record' ? recordHtml() : S.tab === 'close' ? closeHtml() : recvHtml();
+  h += `<div class="small" style="text-align:center;margin-top:12px">${S.loadedAt ? '最終更新 ' + hhmm(S.loadedAt) : 'オフライン表示'}　<button class="link" onclick="loadDay()">更新</button></div>`;
+  app.innerHTML = h;
+  const has = S.day.items.length;
+  if (S.tab === 'record' && has) {
+    const n = S.sel.size;
+    showBar(`<button class="btn btn-danger" ${n && !S.busy ? '' : 'disabled'} onclick="submitOut()">${n ? `在庫切れを記録（${n}件）` : '在庫切れの品目を選んでください'}</button>`);
+  } else if (S.tab === 'close' && has) {
+    showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="submitClose()">期限切れ数を送信</button>`);
+  } else hideBar();
+}
+function pickDate(d) {
+  if (d === S.date) return;
+  S.date = d; S.sel.clear();
+  S.day = LS.get(dayKey(S.session.tid, d), null); S.loadedAt = null;
+  const info = LS.get('kSessInfo', null); if (info) { info.date = d; LS.set('kSessInfo', info); }
+  loadDay();
+}
+function pickTab(t) { S.tab = t; render(); loadDay(true); }
+
+/* --- 時間帯ごとのグループ表示（受取時間。旧データは品目名末尾の「（10:30）」） --- */
+function slotOf(name) { const m = String(name).match(/（(\d{1,2}:\d{2})）$/); return m ? m[1] : ''; }
+function baseName(name) { return String(name).replace(/（\d{1,2}:\d{2}）$/, ''); }
+function toMin(t) { const [h, m] = (t || '99:99').split(':').map(Number); return h * 60 + m; }
+function recvOf(it) { return it.recv || slotOf(it.name); }
+function groupBySlot(items) {
+  const g = [];
+  items.forEach((it, i) => { const s = recvOf(it); let x = g.find(y => y.slot === s); if (!x) g.push(x = { slot: s, list: [] }); x.list.push([it, i]); });
+  return g.sort((a, b) => toMin(a.slot) - toMin(b.slot));
+}
+function slotHead(slot) { return slot ? '<h2>' + esc(slot) + ' 受取分</h2>' : ''; }
+
+/* --- 賞味期限 --- */
+function parseExp(s) { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : null; }
+function fmtExp(s) { const d = parseExp(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hhmm(d) : ''; }
+function groupByReceipt(items) {
+  const g = [];
+  items.forEach((it, i) => {
+    const key = recvOf(it) + '|' + (it.store || '') + '|' + (it.exp || '');
+    let x = g.find(y => y.key === key);
+    if (!x) g.push(x = { key, recv: recvOf(it), store: it.store || '', exp: it.exp || '', method: it.method || '', addr: it.addr || '', tel: it.tel || '', list: [] });
+    x.list.push([it, i]);
+  });
+  return g.sort((a, b) => { const ea = parseExp(a.exp), eb = parseExp(b.exp); return (ea ? ea.getTime() : 9e15) - (eb ? eb.getTime() : 9e15) || toMin(a.recv) - toMin(b.recv); });
+}
+/** 受取グループの状態：due=期限到来で未入力 / soon=1時間以内 / wait=期限前 / done=入力済み / none=期限未設定 */
+function expStatus(g) {
+  const live = g.list.filter(([it]) => !it.soldOut && !pendingOut().has(it.name));
+  if (!live.length || live.every(([it]) => it.remain != null)) return { cls: 'done', text: '入力済み' };
+  const d = parseExp(g.exp);
+  if (!d) return { cls: 'none', text: '' };
+  const left = Math.round((d - Date.now()) / 60000);
+  if (left <= 0) return { cls: 'due', text: '賞味期限切れ・入力してください' };
+  const t = left >= 60 ? Math.floor(left / 60) + '時間' + (left % 60 ? left % 60 + '分' : '') : left + '分';
+  return { cls: left <= 60 ? 'soon' : 'wait', text: 'あと' + t };
+}
+function dueCount() { return S.day ? groupByReceipt(S.day.items).filter(g => expStatus(g).cls === 'due').length : 0; }
+
+/* --- 在庫切れ記録 --- */
+function recordHtml() {
+  const items = S.day.items;
+  if (!items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
+  const pend = pendingOut();
+  const due = dueCount();
+  return (due ? `<div class="notice warn">賞味期限を過ぎた受取が${due}件あります。期限切れ数を入力してください。<button class="link" onclick="pickTab('close')">期限切れへ</button></div>` : '') +
+    groupBySlot(items).map(g => slotHead(g.slot) + '<div class="grid">' + g.list.map(([it, i]) => {
+    const nm = esc(baseName(it.name));
+    if (it.soldOut) return `<div class="item out"><div>${nm}</div><div class="meta">在庫切れ ${esc(it.soldOut.time)}（${esc(it.soldOut.by)}）</div><button class="cancel" onclick="cancelOut(${i})">取消</button></div>`;
+    if (pend.has(it.name)) return `<div class="item out pending"><div>${nm}</div><div class="meta">在庫切れ（送信待ち）</div></div>`;
+    const on = S.sel.has(it.name);
+    return `<button class="item ${on ? 'sel' : ''}" onclick="toggle(${i})"><div>${nm}</div><div class="meta">${on ? '✓ 選択中' : '在庫数 ' + it.stock}</div></button>`;
+  }).join('') + '</div>').join('');
+}
+function toggle(i) { const n = S.day.items[i].name; S.sel.has(n) ? S.sel.delete(n) : S.sel.add(n); render(); }
+async function submitOut() {
+  const names = [...S.sel]; if (!names.length || S.busy) return;
+  if (!confirm('以下を在庫切れとして記録します。\n\n' + names.map(n => '・' + n).join('\n'))) return;
+  const s = S.session;
+  const args = [s.tid, s.pin, S.date, names, s.staff, uid(), Date.now()];
+  S.busy = true; render();
+  try {
+    S.day = await call('markSoldOut', ...args); S.loadedAt = new Date(); LS.set(dayKey(s.tid, S.date), S.day);
+    toast('記録しました');
+  } catch (e) {
+    if (isNetErr(e)) { enqueue({ fn: 'markSoldOut', args, kind: 'out', tid: s.tid, date: S.date, names }); toast('通信できないため端末に保存しました。回復後に自動送信します'); }
+    else toast(errMsg(e));
+  }
+  S.sel.clear(); S.busy = false; render();
+}
+async function cancelOut(i) {
+  const it = S.day.items[i];
+  if (!confirm(`「${it.name}」の在庫切れ記録を取り消しますか？`)) return;
+  const s = S.session;
+  S.busy = true;
+  try { S.day = await call('cancelSoldOut', s.tid, s.pin, S.date, it.name, s.staff); S.loadedAt = new Date(); toast('取り消しました'); }
+  catch (e) { toast(isNetErr(e) ? '通信できないため取り消せません' : errMsg(e)); }
+  S.busy = false; render();
+}
+
+/* --- 受取（受取時間・受取方法・住所の一覧） --- */
+function isPickup(m) { return /店舗|受け?取|テイクアウト|持ち帰/.test(m || '') && !/配達|デリバリー|配送|出前/.test(m || ''); }
+function methodLabel(m) {
+  const t = String(m || '').replace(/　/g, ' ').trim();
+  if (!t) return { label: '', note: '' };
+  const lab = /配達|デリバリー|配送|出前|ウーバー|uber/i.test(t) ? '配達' : isPickup(t) ? '店舗受取' : t;
+  const note = t.replace(/^(店舗)?受け?取り?|^配達|^デリバリー/, '').trim();
+  return { label: lab, note: lab === t ? '' : note };
+}
+function recvHtml() {
+  const d = S.day;
+  if (!d.items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
+  const groups = groupByReceipt(d.items).sort((a, b) => toMin(a.recv) - toMin(b.recv));
+  const nowMin = (() => { const n = new Date(); return md(S.date) === md(S.today) ? n.getHours() * 60 + n.getMinutes() : -1; })();
+  return '<div class="notice info">この日の受取予定です。時間・受取方法・受取場所を確認してください。</div>' + groups.map(g => {
+    const m = methodLabel(g.method);
+    const map = g.addr ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g.addr)}" target="_blank" rel="noopener">地図</a>` : '';
+    const tel = g.tel ? `<a href="tel:${esc(g.tel.replace(/[^\d+]/g, ''))}">${esc(g.tel)}</a>` : '';
+    const past = nowMin >= 0 && g.recv && toMin(g.recv) < nowMin - 30;
+    return `<div class="rcv ${past ? 'past' : ''}">
+      <div class="top"><span class="tm">${esc(g.recv || '--:--')}</span><span class="st">${esc(g.store || '店舗未設定')}</span></div>
+      ${m.label ? `<span class="mth ${m.label === '配達' ? 'dlv' : ''}">${esc(m.label)}</span>${m.note ? `<span class="note">${esc(m.note)}</span>` : ''}` : ''}
+      ${g.addr || tel ? `<div class="info">${g.addr ? '住所：' + esc(g.addr) + map : ''}${g.addr && tel ? '<br>' : ''}${tel ? '電話：' + tel : ''}</div>` : ''}
+      <div class="its">${g.list.map(([it]) => `<span>${esc(baseName(it.name))} ${it.stock}</span>`).join('')}</div>
+      ${g.exp ? `<div class="exp">賞味期限 ${esc(fmtExp(g.exp))}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* --- 期限切れ --- */
+function closeValue(it) {
+  const d = S.draft[S.date] || {};
+  if (d[it.name] !== undefined) return d[it.name];
+  if (it.remain != null) return it.remain;
+  return '';
+}
+function closeHtml() {
+  const d = S.day;
+  if (!d.items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
+  let h = '';
+  const pend = pendingOut();
+  if (pendingClose()) h += '<div class="notice warn">期限切れ数のデータが送信待ちです。</div>';
+  h += '<div class="notice info">賞味期限切れ時に、期限切れとなる各品目の数を数えて入力してください。在庫切れになった品目は表示されません（期限切れ0として自動で記録されます）。入力した品目だけ送信されます。</div>';
+  const due = dueCount();
+  if (due) h += `<div class="notice warn">賞味期限を過ぎた受取が${due}件あります。赤枠の品目を入力してください。</div>`;
+  if (d.closed) h += `<div class="small" style="margin:-4px 0 10px">最終送信 ${esc(d.closed.at)}（${esc(d.closed.by)}）。送信済みの品目を再送信すると上書きされます。</div>`;
+  const groups = groupByReceipt(d.items).map(g => ({ ...g, st: expStatus(g), list: g.list.filter(([it]) => !it.soldOut && !pend.has(it.name)) })).filter(g => g.list.length);
+  if (!groups.length) h += '<div class="card empty">すべての品目が在庫切れのため、入力は不要です。「期限切れ数を送信」を押してください。</div>';
+  h += groups.map(g => {
+    const head = (g.recv ? esc(g.recv) + ' 受取分' : '受取時間未設定') + (g.store ? '　' + esc(g.store) : '');
+    const badge = g.st.text ? `<span class="badge ${g.st.cls}">${esc(g.st.text)}</span>` : '';
+    return `<h2>${head}${badge}</h2>` + (g.exp ? `<div class="gsub">賞味期限 ${esc(fmtExp(g.exp))}</div>` : '') +
+      `<div class="card ${g.st.cls === 'due' ? 'due' : ''}" style="padding:4px 16px">` + g.list.map(([it, i]) =>
+      `<div class="row"><div class="nm">${esc(baseName(it.name))}<div class="small">在庫数 ${it.stock}${it.remain != null ? '・送信済み' : ''}</div></div>
+       <input type="number" inputmode="numeric" min="0" step="1" placeholder="個数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>';
+  }).join('');
+  return h;
+}
+function draftIn(el) { const it = S.day.items[+el.dataset.i]; (S.draft[S.date] = S.draft[S.date] || {})[it.name] = el.value; }
+async function submitClose() {
+  if (S.busy) return;
+  const entries = [], over = [];
+  const pend = pendingOut();
+  let typed = 0, live = 0;
+  for (const it of S.day.items) {
+    if (it.soldOut || pend.has(it.name)) { entries.push({ item: it.name, remain: 0 }); continue; } // 在庫切れは期限切れ0
+    live++;
+    const v = String(closeValue(it)).trim();
+    if (v === '') continue; // 未入力は送信しない
+    if (!/^\d+$/.test(v)) return toast(`「${baseName(it.name)}」の期限切れ数は0以上の整数で入力してください`);
+    if (+v > it.stock) over.push(baseName(it.name));
+    entries.push({ item: it.name, remain: +v }); typed++;
+  }
+  if (live && !typed) return toast('期限切れ数を入力してください');
+  let msg = `${md(S.date)} の期限切れ数を送信します（${typed}品目）。`;
+  if (typed < live) msg += '\n未入力の品目は送信されません。';
+  if (over.length) msg += '\n\n在庫数より多い期限切れ数があります：\n' + over.map(n => '・' + n).join('\n');
+  if (!confirm(msg)) return;
+  const s = S.session, date = S.date;
+  const args = [s.tid, s.pin, date, entries, s.staff, Date.now()];
+  S.busy = true; render();
+  try {
+    S.day = await call('submitClose', ...args); S.loadedAt = new Date(); LS.set(dayKey(s.tid, date), S.day);
+    delete S.draft[date]; toast('送信しました');
+  } catch (e) {
+    if (isNetErr(e)) {
+      enqueue({ fn: 'submitClose', args, kind: 'close', tid: s.tid, date });
+      toast('通信できないため端末に保存しました。回復後に自動送信します');
+    } else toast(errMsg(e));
+  }
+  S.busy = false; render();
+}
+
+/* ===== 管理者メニュー ===== */
+function openAdmin() { S.view = 'adminLogin'; render(); }
+async function backToLogin() {
+  S.admin = null; S.form = null; S.view = 'loading'; render();
+  try { const r = await call('getTournaments'); S.tournaments = r.list; S.today = r.today; } catch (e) { toast(netMsg(e)); }
+  S.view = 'login'; render();
+}
+function renderAdminLogin() {
+  hideBar();
+  app.innerHTML = `<div class="header"><h1>管理者メニュー</h1><button class="link" onclick="backToLogin()">戻る</button></div>
+    <div class="card"><label>管理者PIN</label><input id="adPin" type="password" inputmode="numeric" autocomplete="off">
+    <button class="btn" style="margin-top:16px" onclick="adminLogin()">ログイン</button></div>`;
+}
+async function adminLogin() {
+  const pin = val('adPin').trim(); if (!pin) return toast('管理者PINを入力してください');
+  try { S.admin = { pin, list: await call('adminList', pin) }; S.view = 'adminList'; render(); } catch (e) { toast(netMsg(e)); }
+}
+function renderAdminList() {
+  hideBar();
+  const list = S.admin.list;
+  app.innerHTML = `<div class="header"><h1>大会設定</h1><button class="link" onclick="backToLogin()">終了</button></div>
+    <button class="btn" onclick="editT(-1)">＋ 新しい大会を作成</button><div style="margin-top:12px">` +
+    (list.length ? list.map((t, i) => `<div class="card"><div style="font-weight:700">${esc(t.name)}</div>
+      <div class="small">${t.active ? '有効' : '無効'}・スタッフPIN ${esc(t.staffPin)}</div>
+      <div class="small" style="margin-top:6px">${t.days.map(d => md(d.date) + ' ' + d.items.length + '品目').join('　') || '開催日なし'}</div>
+      <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button></div></div>`).join('')
+      : '<div class="card empty">大会が登録されていません</div>') + '</div>';
+}
+/* 管理画面は「受取（店舗×受取時間×賞味期限）」単位で品目をまとめて編集する */
+function newGroup() { return { store: '', recv: '', exp: '', method: '', addr: '', tel: '', items: [{ name: '', stock: '' }] }; }
+function toForm(t) {
+  return { id: t.id, name: t.name, staffPin: t.staffPin, active: t.active, days: t.days.map(d => {
+    const groups = [];
+    d.items.forEach(it => {
+      const recv = it.recv || slotOf(it.name), exp = String(it.exp || '').replace(' ', 'T'), store = it.store || '';
+      let g = groups.find(x => x.store === store && x.recv === recv && x.exp === exp);
+      if (!g) groups.push(g = { store, recv, exp, method: it.method || '', addr: it.addr || '', tel: it.tel || '', items: [] });
+      const nm = recv && String(it.name).endsWith('（' + recv + '）') ? it.name.slice(0, -(recv.length + 2)) : it.name;
+      g.items.push({ name: nm, stock: it.stock });
+    });
+    return { date: d.date, groups: groups.length ? groups : [newGroup()] };
+  }) };
+}
+function fromForm(f) {
+  return { id: f.id, name: f.name, staffPin: f.staffPin, active: f.active, days: f.days.map(d => {
+    const flat = [];
+    d.groups.forEach(g => g.items.forEach(it => { if (String(it.name).trim() || String(it.stock).trim()) flat.push({ base: String(it.name).trim(), stock: it.stock, store: g.store.trim(), recv: g.recv, exp: g.exp, method: String(g.method || '').trim(), addr: String(g.addr || '').trim(), tel: String(g.tel || '').trim() }); }));
+    const cnt = k => flat.filter(x => k(x)).length;
+    flat.forEach(x => {
+      let n = x.base;
+      if (cnt(y => y.base === x.base) > 1) {
+        if (cnt(y => y.base === x.base && y.recv === x.recv) > 1 && x.store) n += '（' + x.store + '）';
+        if (x.recv) n += '（' + x.recv + '）';
+      }
+      x.name = n;
+    });
+    return { date: d.date, items: flat.map(x => ({ name: x.name, stock: x.stock, store: x.store, recv: x.recv, exp: x.exp, method: x.method, addr: x.addr, tel: x.tel })) };
+  }) };
+}
+function editT(i) {
+  S.form = i < 0 ? { id: '', name: '', staffPin: '', active: true, days: [{ date: S.today || '', groups: [newGroup()] }] } : toForm(clone(S.admin.list[i]));
+  S.view = 'adminEdit'; render();
+}
+function copyT(i) { const f = toForm(clone(S.admin.list[i])); f.id = ''; f.name += '（コピー）'; S.form = f; S.view = 'adminEdit'; render(); }
+function cancelEdit() { if (!confirm('編集内容を破棄しますか？')) return; S.form = null; S.view = 'adminList'; render(); }
+function renderAdminEdit() {
+  const f = S.form;
+  app.innerHTML = `<div class="header"><h1>${f.id ? '大会を編集' : '新しい大会'}</h1><button class="link" onclick="cancelEdit()">キャンセル</button></div>
+    <div class="card"><label>大会名</label><input id="fName" value="${esc(f.name)}" placeholder="例：JOPT 2026 Fukuoka #01">
+    <label>スタッフPIN（数字4〜8桁）</label><input id="fPin" inputmode="numeric" value="${esc(f.staffPin)}">
+    <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>有効（スタッフのログイン画面に表示する）</label></div>
+    <div class="card"><div style="font-weight:700">軽食シートから取り込み</div>
+    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗・受取時間と、店名の下（B列）の受取方法（「配達」「店舗受け取り」など）・電話番号・「住所：〜」の行をシートから読み取ります。各店舗の「計」の行の下に、品目名の欄へ「賞味期限」、個数の欄へ時刻（例：15:00、日をまたぐ場合は 10/31 9:00）を書くと賞味期限も取り込みます。同様に「受取」行で店舗ごとの受取時間を上書きできます。</div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="fSplit" checked>受取時間帯ごとに分ける（例：めんまよ（10:30）／めんまよ（18:00））。外すと同じ日の受取枠を合算します。</label>
+    <label>シートに賞味期限がない受取の賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
+    <label class="btn" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;color:#fff;font-size:16px;font-weight:600">CSVファイルを選んで取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this)"></label>
+    <textarea id="fImport" rows="3" placeholder="またはここに貼り付け"></textarea>
+    <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet()">貼り付けた内容を取り込む</button></div>
+    <h2>開催日ごとの受取・品目・在庫数</h2>` +
+    f.days.map((d, di) => `<div class="card" data-di="${di}">
+      <div class="irow" style="margin-top:0"><input type="date" class="dDate" value="${esc(d.date)}" style="flex:1;min-width:0"><button class="btn-sub" onclick="fAct('delDay',${di})">日を削除</button></div>` +
+      d.groups.map((g, gi) => `<div class="grp" data-gi="${gi}">
+        <div class="ghead">
+          <div class="full"><label>店舗</label><input class="gStore" value="${esc(g.store)}" placeholder="例：ごりちゃん"></div>
+          <div><label>受取時間</label><input class="gRecv" type="time" value="${esc(g.recv)}"></div>
+          <div><label>賞味期限</label><input class="gExp" type="datetime-local" value="${esc(g.exp)}"></div>
+          <div class="full"><label>受取方法</label><input class="gMethod" value="${esc(g.method)}" placeholder="例：店舗受け取り／配達"></div>
+          <div class="full"><label>住所（店舗受取の場合）</label><input class="gAddr" value="${esc(g.addr)}" placeholder="例：大阪市北区中崎1-2-3"></div>
+          <div class="full"><label>電話</label><input class="gTel" type="tel" value="${esc(g.tel)}" placeholder="例：06-1234-5678"></div>
+        </div>
+        <div class="small" style="margin-top:10px">品目名 ／ 在庫数</div>` +
+        g.items.map((it, ii) => `<div class="irow"><input class="iname" value="${esc(it.name)}" placeholder="品目名"><input class="istock" type="number" inputmode="numeric" min="0" step="1" value="${esc(it.stock)}" placeholder="在庫数"><button class="btn-sub" onclick="fAct('delItem',${di},${gi},${ii})">×</button></div>`).join('') +
+        `<div class="btns"><button class="btn-sub" onclick="fAct('addItem',${di},${gi})">＋ 品目を追加</button><button class="btn-sub" onclick="fAct('delGroup',${di},${gi})">受取を削除</button></div></div>`).join('') +
+      `<div class="btns"><button class="btn-sub" onclick="fAct('addGroup',${di})">＋ 受取を追加</button>${di > 0 ? `<button class="btn-sub" onclick="fAct('copyPrev',${di})">前日の内容をコピー</button>` : ''}</div></div>`).join('') +
+    '<button class="btn-sub" style="width:100%" onclick="fAct(\'addDay\')">＋ 開催日を追加</button>';
+  showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="saveT()">保存</button>`);
+}
+function readForm() {
+  const f = S.form;
+  f.name = val('fName'); f.staffPin = val('fPin'); f.active = document.getElementById('fActive').checked;
+  f.days = [...document.querySelectorAll('[data-di]')].map(el => ({
+    date: el.querySelector('.dDate').value,
+    groups: [...el.querySelectorAll('[data-gi]')].map(g => ({
+      store: g.querySelector('.gStore').value, recv: g.querySelector('.gRecv').value, exp: g.querySelector('.gExp').value,
+      method: g.querySelector('.gMethod').value, addr: g.querySelector('.gAddr').value, tel: g.querySelector('.gTel').value,
+      items: [...g.querySelectorAll('.irow')].map(r => ({ name: r.querySelector('.iname').value, stock: r.querySelector('.istock').value })),
+    })),
+  }));
+}
+/** 前日の内容をコピーするとき、賞味期限の日付を開催日の差だけずらす */
+function shiftExp(exp, from, to) {
+  const d = parseExp(exp); if (!d || !from || !to) return exp;
+  const diff = Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 864e5);
+  d.setDate(d.getDate() + diff);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d);
+}
+function copyGroups(src, from, to) { return clone(src).map(g => ({ ...g, exp: shiftExp(g.exp, from, to) })); }
+function fAct(a, di, gi, ii) {
+  readForm();
+  const days = S.form.days;
+  if (a === 'addItem') days[di].groups[gi].items.push({ name: '', stock: '' });
+  if (a === 'delItem') { const it = days[di].groups[gi].items; it.splice(ii, 1); if (!it.length) it.push({ name: '', stock: '' }); }
+  if (a === 'addGroup') days[di].groups.push(newGroup());
+  if (a === 'delGroup') { if (!confirm('この受取を削除しますか？')) return; days[di].groups.splice(gi, 1); if (!days[di].groups.length) days[di].groups.push(newGroup()); }
+  if (a === 'copyPrev') days[di].groups = copyGroups(days[di - 1].groups, days[di - 1].date, days[di].date);
+  if (a === 'delDay') { if (days.length === 1) return toast('開催日は1日以上必要です'); if (!confirm('この開催日を削除しますか？')) return; days.splice(di, 1); }
+  if (a === 'addDay') { const last = days[days.length - 1]; const date = last && last.date ? addDays(last.date, 1) : (S.today || ''); days.push({ date, groups: last ? copyGroups(last.groups, last.date, date) : [newGroup()] }); }
+  render();
+}
+async function saveT() {
+  if (S.busy) return;
+  readForm(); S.busy = true; render();
+  try { S.admin.list = await call('adminSave', S.admin.pin, fromForm(S.form)); S.form = null; S.view = 'adminList'; toast('保存しました'); }
+  catch (e) { toast(netMsg(e)); }
+  S.busy = false; render();
+}
+
+/* ===== 軽食シート（CSV／コピー貼り付け）の取り込み ===== */
+function parseTable(text) {
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = first.split('\t').length > first.split(',').length ? '\t' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"' && cell === '') q = true;
+    else if (c === delim) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(c => String(c).trim()));
+}
+function mdToIso(md, today) {
+  const [m, d] = md.split('/').map(Number);
+  const base = today ? new Date(today + 'T00:00:00') : new Date();
+  let y = base.getFullYear();
+  if (new Date(y, m - 1, d) - base < -120 * 864e5) y++;
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+/* 時刻・日時の読み取り（CSVの「9:45」「15:00:00」「10/31 9:00」「2026/10/31 9:00」など） */
+function parseHM(v) { const m = String(v || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/); return m && +m[1] < 24 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; }
+function parseExpCell(v, date, recv, today) {
+  const t = String(v || '').trim().replace(/／/g, '/').replace(/：/g, ':');
+  let m = t.match(/^(?:(\d{4})[\/-])?(\d{1,2})[\/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) {
+    const d = m[1] ? m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0') : mdToIso(m[2] + '/' + m[3], today);
+    return d + 'T' + m[4].padStart(2, '0') + ':' + m[5];
+  }
+  const hm = parseHM(t);
+  if (hm) { const d = recv && toMin(hm) < toMin(recv) ? addDays(date, 1) : date; return d + 'T' + hm; } // 受取より前の時刻は翌日
+  m = t.match(/^\+?(\d+(?:\.\d+)?)\s*(?:h|時間)$/i);
+  if (m && recv) return expAfter(date, recv, +m[1]);
+  return null;
+}
+function expAfter(date, recv, h) {
+  const d = new Date(date + 'T' + recv + ':00'); d.setMinutes(d.getMinutes() + Math.round(h * 60));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d);
+}
+function importKeishoku(text, today, split, expH) {
+  const rows = parseTable(text);
+  const isMd = s => /^\d{1,2}\/\d{1,2}$/.test(s || '');
+  const hi = rows.findIndex(r => r.some(isMd));
+  if (hi < 0) throw new Error('日付の行（例：10/29）が見つかりません');
+  const hdr = rows[hi], times = rows[hi + 1] || [];
+  const width = Math.max(...rows.map(r => r.length));
+  const slots = []; let cur = null;
+  for (let c = 0; c < width; c++) {
+    if (isMd(hdr[c])) cur = hdr[c];
+    if (cur && (isMd(hdr[c]) || parseHM(times[c]))) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(times[c]) });
+  }
+  const shortStore = s => s.replace(/[（(][^）)]*[）)]/g, '').trim() || s;
+  const inParen = s => { const m = s.match(/[（(]([^）)]*)[）)]/); return m && !/新規/.test(m[1]) ? m[1] : shortStore(s); };
+  const isRecvLabel = s => /^受取(時間|時刻)?$|^受け取り(時間)?$/.test(s);
+  const isExpLabel = s => /^(賞味|消費)?期限$/.test(s);
+  // 店舗×受取枠（列）ごとに集計する
+  const cells = new Map(); let store = null; const bad = [];
+  const info = {}; // 店舗ごとの受取方法・住所・電話（店名の下のB列）
+  const isTel = t => /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/.test(t.replace(/[\s（）()]/g, ''));
+  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) cells.set(k, { rawStore: st, date: s.date, recv: s.time, expRaw: '', items: [] }); return cells.get(k); };
+  for (let i = hi + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) store = r[1];
+    if (!store) continue;
+    const b = (r[1] || '').replace(/\u3000/g, ' ').trim();
+    if (b && b !== store) {
+      const st = info[store] = info[store] || { method: '', addr: '', tel: '' };
+      const am = b.match(/^(?:住所|所在地|受取場所|受け取り場所)\s*[:：]?\s*(.+)$/);
+      if (am) st.addr = am[1].trim();
+      else if (isTel(b)) st.tel = b;
+      else if (/配達|デリバリー|配送|出前|店舗|受け?取|テイクアウト|持ち帰/.test(b) && !st.method) st.method = b;
+    }
+    slots.forEach(s => {
+      const name = (r[s.col] || '').replace(/\s+/g, ''), raw = String(r[s.col + 1] || '').trim();
+      if (!name) return;
+      if (isRecvLabel(name)) { if (!raw) return; const hm = parseHM(raw); if (hm) cellOf(store, s).recv = hm; else bad.push(md(s.date) + ' ' + shortStore(store) + ' 受取「' + raw + '」'); return; }
+      if (isExpLabel(name)) { if (raw) cellOf(store, s).expRaw = raw; return; }
+      const qty = raw.replace(/,/g, '');
+      if (name === '計' || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
+      const nm = (r[s.col] || '').trim();
+      cellOf(store, s).items.push({ name: nm.length <= 2 ? inParen(store) + ' ' + nm : nm, stock: +qty });
+    });
+    if (r.some(c => /^total$/i.test(c))) store = null;
+  }
+  const h = Number(expH);
+  const days = {}; let expFromSheet = 0, expFromHours = 0, expBlank = 0;
+  cells.forEach(c => {
+    if (!c.items.length) return;
+    let exp = '';
+    if (c.expRaw) { exp = parseExpCell(c.expRaw, c.date, c.recv, today); if (exp == null) { bad.push(md(c.date) + ' ' + shortStore(c.rawStore) + ' 賞味期限「' + c.expRaw + '」'); exp = ''; } else expFromSheet++; }
+    if (!exp && c.recv && h > 0) { exp = expAfter(c.date, c.recv, h); expFromHours++; }
+    if (!exp) expBlank++;
+    const groups = days[c.date] = days[c.date] || [];
+    // 時間帯を分ける：店舗×受取時間でまとめる／合算：店舗でまとめ、受取時間・賞味期限は最も早いもの
+    let g = groups.find(x => x.rawStore === c.rawStore && (!split || x.recv === c.recv));
+    if (!g) { const si = info[c.rawStore] || {}; groups.push(g = { rawStore: c.rawStore, store: shortStore(c.rawStore), recv: c.recv, exp, method: si.method || '', addr: si.addr || '', tel: si.tel || '', items: [] }); }
+    else {
+      if (c.recv && (!g.recv || toMin(c.recv) < toMin(g.recv))) g.recv = c.recv;
+      if (exp && (!g.exp || exp < g.exp)) g.exp = exp;
+    }
+    c.items.forEach(it => { const e = g.items.find(x => x.name === it.name); if (e) e.stock += it.stock; else g.items.push({ ...it }); });
+  });
+  const dates = Object.keys(days).sort();
+  if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
+  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: split ? g.recv : '', exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, items: g.items })) }));
+  result.info = { expFromSheet, expFromHours, expBlank, bad };
+  return result;
+}
+async function importFile(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { text = new TextDecoder('shift_jis').decode(buf); } // Excelで保存したCSV
+  document.getElementById('fImport').value = text.replace(/^\uFEFF/, '');
+  importSheet();
+}
+function importSheet() {
+  readForm();
+  const text = val('fImport');
+  if (!text.trim()) return toast('軽食シートの内容を貼り付けてください');
+  let days;
+  try { days = importKeishoku(text, S.today, document.getElementById('fSplit').checked, val('fExpH')); } catch (e) { return toast(errMsg(e)); }
+  const cntD = d => d.groups.reduce((a, g) => a + g.items.length, 0);
+  const n = days.reduce((a, d) => a + cntD(d), 0);
+  const inf = days.info;
+  let msg = `${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.groups.length + '受取・' + cntD(d) + '品目').join('\n');
+  msg += `\n\n賞味期限：シートから${inf.expFromSheet}受取` + (inf.expFromHours ? `／受取から${val('fExpH')}時間後で${inf.expFromHours}受取` : '') + (inf.expBlank ? `／未設定${inf.expBlank}受取` : '');
+  if (inf.bad.length) msg += '\n\n読み取れなかった値（空欄として扱います）：\n' + inf.bad.slice(0, 8).map(b => '・' + b).join('\n') + (inf.bad.length > 8 ? '\n…ほか' + (inf.bad.length - 8) + '件' : '');
+  if (!confirm(msg + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
+  S.form.days = days.map(d => ({ date: d.date, groups: d.groups }));
+  render();
+  toast('取り込みました。内容を確認して保存してください');
+}
+
+/* ===== 自動更新（他スタッフの記録を反映） ===== */
+setInterval(() => { if (S.view === 'main' && S.tab === 'record' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
+setInterval(() => { const a = document.activeElement; if (S.view === 'main' && !S.busy && !(a && a.tagName === 'INPUT')) render(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'main') { flush(); loadDay(true); } });
+
+init();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>軽食 在庫管理</title>
+<base target="_top">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--line:#e2e5ea;--text:#1f2329;--sub:#6b7280;--accent:#1a73e8;--accent-weak:#e8f0fe;--danger:#d93025;--danger-weak:#fce8e6;--ok-weak:#e6f4ea;--warn-weak:#fef7e0;--muted:#eceff3}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 120px}
+h1{font-size:20px;margin:8px 0 16px}
+h2{font-size:16px;margin:20px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+label.check{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin-top:16px}
+label.check input{width:20px;height:20px}
+input,select,textarea{width:100%;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text);font-family:inherit}
+button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:pointer;font-weight:600;font-family:inherit}
+.btn{background:var(--accent);color:#fff;width:100%}
+.btn-danger{background:var(--danger)}
+.btn:disabled{background:#c4c9d0}
+.btn-sub{background:var(--muted);color:var(--text)}
+.link{background:none;color:var(--accent);padding:8px 0;font-weight:500}
+.small{font-size:13px;color:var(--sub)}
+.header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0 4px}
+.chip{flex:0 0 auto;background:#fff;border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:20px;font-weight:500}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tabs{display:flex;background:var(--muted);border-radius:10px;padding:4px;margin:12px 0}
+.tab{flex:1;background:none;color:var(--sub);padding:10px}
+.tab.on{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.item{background:#fff;border:2px solid var(--line);border-radius:12px;padding:14px;text-align:left;min-height:88px;display:flex;flex-direction:column;justify-content:space-between;font-weight:600;color:var(--text);font-size:16px}
+.item .meta{font-size:12px;color:var(--sub);font-weight:500;margin-top:6px}
+.item.sel{border-color:var(--danger);background:var(--danger-weak)}
+.item.sel .meta{color:var(--danger)}
+.item.out{background:var(--muted);color:var(--sub);border-color:var(--muted)}
+.item.pending{border-style:dashed;border-color:#c4c9d0}
+.item .cancel{margin-top:8px;font-size:13px;padding:6px 8px;background:#fff;color:var(--danger);border:1px solid var(--line)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+.bar .in{max-width:640px;margin:0 auto}
+.row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.row .nm{flex:1;font-weight:600}
+.row .nm .small{font-weight:400;margin-top:2px}
+.row input{width:96px;text-align:right}
+.notice{border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px;line-height:1.5}
+.notice.info{background:var(--accent-weak)}
+.notice.warn{background:var(--warn-weak)}
+.notice.ok{background:var(--ok-weak)}
+#toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10;max-width:90%}
+#toast.show{opacity:1}
+.hidden{display:none!important}
+.irow{display:flex;gap:8px;margin-top:8px}
+.irow .iname{flex:1;min-width:0}
+.irow .istock{width:84px}
+.irow button{padding:8px 12px;flex:0 0 auto}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btns button{flex:1}
+.empty{color:var(--sub);text-align:center;padding:24px 0}
+textarea{margin-top:10px;font-size:14px;resize:vertical}
+.grp{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;background:#fafbfc}
+.ghead{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:6px 8px}
+.ghead>div{min-width:0}
+.ghead label{margin:0 0 2px}
+.ghead .full{grid-column:1 / -1}
+.ghead input{padding:10px;min-width:0;width:100%;font-size:15px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:6px;vertical-align:middle}
+.badge.due{background:var(--danger);color:#fff}
+.badge.soon{background:var(--warn-weak);color:#8a5a00}
+.badge.done{background:var(--ok-weak);color:#1e6b34}
+.badge.wait{background:var(--muted);color:var(--sub)}
+.card.due{border:2px solid var(--danger)}
+.gsub{font-size:13px;color:var(--sub);margin:-4px 0 8px}
+.notice .link{padding:0;margin-left:4px}
 </style>
 </head>
 <body>
