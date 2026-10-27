@@ -61,6 +61,20 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .btns button{flex:1}
 .empty{color:var(--sub);text-align:center;padding:24px 0}
 textarea{margin-top:10px;font-size:14px;resize:vertical}
+.grp{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;background:#fafbfc}
+.ghead{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:6px 8px}
+.ghead>div{min-width:0}
+.ghead label{margin:0 0 2px}
+.ghead .full{grid-column:1 / -1}
+.ghead input{padding:10px;min-width:0;width:100%;font-size:15px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:6px;vertical-align:middle}
+.badge.due{background:var(--danger);color:#fff}
+.badge.soon{background:var(--warn-weak);color:#8a5a00}
+.badge.done{background:var(--ok-weak);color:#1e6b34}
+.badge.wait{background:var(--muted);color:var(--sub)}
+.card.due{border:2px solid var(--danger)}
+.gsub{font-size:13px;color:var(--sub);margin:-4px 0 8px}
+.notice .link{padding:0;margin-left:4px}
 </style>
 </head>
 <body>
@@ -255,24 +269,53 @@ function pickDate(d) {
 }
 function pickTab(t) { S.tab = t; render(); loadDay(true); }
 
-/* --- 時間帯（品目名末尾の「（10:30）」）ごとのグループ表示 --- */
+/* --- 時間帯ごとのグループ表示（受取時間。旧データは品目名末尾の「（10:30）」） --- */
 function slotOf(name) { const m = String(name).match(/（(\d{1,2}:\d{2})）$/); return m ? m[1] : ''; }
 function baseName(name) { return String(name).replace(/（\d{1,2}:\d{2}）$/, ''); }
 function toMin(t) { const [h, m] = (t || '99:99').split(':').map(Number); return h * 60 + m; }
+function recvOf(it) { return it.recv || slotOf(it.name); }
 function groupBySlot(items) {
   const g = [];
-  items.forEach((it, i) => { const s = slotOf(it.name); let x = g.find(y => y.slot === s); if (!x) g.push(x = { slot: s, list: [] }); x.list.push([it, i]); });
+  items.forEach((it, i) => { const s = recvOf(it); let x = g.find(y => y.slot === s); if (!x) g.push(x = { slot: s, list: [] }); x.list.push([it, i]); });
   return g.sort((a, b) => toMin(a.slot) - toMin(b.slot));
 }
 function slotHead(slot) { return slot ? '<h2>' + esc(slot) + ' 受取分</h2>' : ''; }
+
+/* --- 賞味期限 --- */
+function parseExp(s) { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : null; }
+function fmtExp(s) { const d = parseExp(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hhmm(d) : ''; }
+function groupByReceipt(items) {
+  const g = [];
+  items.forEach((it, i) => {
+    const key = recvOf(it) + '|' + (it.store || '') + '|' + (it.exp || '');
+    let x = g.find(y => y.key === key);
+    if (!x) g.push(x = { key, recv: recvOf(it), store: it.store || '', exp: it.exp || '', list: [] });
+    x.list.push([it, i]);
+  });
+  return g.sort((a, b) => { const ea = parseExp(a.exp), eb = parseExp(b.exp); return (ea ? ea.getTime() : 9e15) - (eb ? eb.getTime() : 9e15) || toMin(a.recv) - toMin(b.recv); });
+}
+/** 受取グループの状態：due=期限到来で未入力 / soon=1時間以内 / wait=期限前 / done=入力済み / none=期限未設定 */
+function expStatus(g) {
+  const live = g.list.filter(([it]) => !it.soldOut && !pendingOut().has(it.name));
+  if (!live.length || live.every(([it]) => it.remain != null)) return { cls: 'done', text: '入力済み' };
+  const d = parseExp(g.exp);
+  if (!d) return { cls: 'none', text: '' };
+  const left = Math.round((d - Date.now()) / 60000);
+  if (left <= 0) return { cls: 'due', text: '賞味期限切れ・入力してください' };
+  const t = left >= 60 ? Math.floor(left / 60) + '時間' + (left % 60 ? left % 60 + '分' : '') : left + '分';
+  return { cls: left <= 60 ? 'soon' : 'wait', text: 'あと' + t };
+}
+function dueCount() { return S.day ? groupByReceipt(S.day.items).filter(g => expStatus(g).cls === 'due').length : 0; }
 
 /* --- 在庫切れ記録 --- */
 function recordHtml() {
   const items = S.day.items;
   if (!items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
   const pend = pendingOut();
-  return groupBySlot(items).map(g => slotHead(g.slot) + '<div class="grid">' + g.list.map(([it, i]) => {
-    const nm = esc(g.slot ? baseName(it.name) : it.name);
+  const due = dueCount();
+  return (due ? `<div class="notice warn">賞味期限を過ぎた受取が${due}件あります。期限切れ数を入力してください。<button class="link" onclick="pickTab('close')">期限切れへ</button></div>` : '') +
+    groupBySlot(items).map(g => slotHead(g.slot) + '<div class="grid">' + g.list.map(([it, i]) => {
+    const nm = esc(baseName(it.name));
     if (it.soldOut) return `<div class="item out"><div>${nm}</div><div class="meta">在庫切れ ${esc(it.soldOut.time)}（${esc(it.soldOut.by)}）</div><button class="cancel" onclick="cancelOut(${i})">取消</button></div>`;
     if (pend.has(it.name)) return `<div class="item out pending"><div>${nm}</div><div class="meta">在庫切れ（送信待ち）</div></div>`;
     const on = S.sel.has(it.name);
@@ -310,7 +353,7 @@ function closeValue(it) {
   const d = S.draft[S.date] || {};
   if (d[it.name] !== undefined) return d[it.name];
   if (it.remain != null) return it.remain;
-  return it.soldOut ? 0 : '';
+  return '';
 }
 function closeHtml() {
   const d = S.day;
@@ -318,13 +361,20 @@ function closeHtml() {
   let h = '';
   const pend = pendingOut();
   if (pendingClose()) h += '<div class="notice warn">期限切れ数のデータが送信待ちです。</div>';
-  else if (d.closed) h += `<div class="notice ok">送信済み ${esc(d.closed.at)}（${esc(d.closed.by)}）。再送信すると上書きされます。</div>`;
-  else h += '<div class="notice info">賞味期限切れ時に、期限切れとなる各品目の数を数えて入力してください。在庫切れになった品目は表示されません（期限切れ0として自動で記録されます）。</div>';
-  const groups = groupBySlot(d.items).map(g => ({ slot: g.slot, list: g.list.filter(([it]) => !it.soldOut && !pend.has(it.name)) })).filter(g => g.list.length);
+  h += '<div class="notice info">賞味期限切れ時に、期限切れとなる各品目の数を数えて入力してください。在庫切れになった品目は表示されません（期限切れ0として自動で記録されます）。入力した品目だけ送信されます。</div>';
+  const due = dueCount();
+  if (due) h += `<div class="notice warn">賞味期限を過ぎた受取が${due}件あります。赤枠の品目を入力してください。</div>`;
+  if (d.closed) h += `<div class="small" style="margin:-4px 0 10px">最終送信 ${esc(d.closed.at)}（${esc(d.closed.by)}）。送信済みの品目を再送信すると上書きされます。</div>`;
+  const groups = groupByReceipt(d.items).map(g => ({ ...g, st: expStatus(g), list: g.list.filter(([it]) => !it.soldOut && !pend.has(it.name)) })).filter(g => g.list.length);
   if (!groups.length) h += '<div class="card empty">すべての品目が在庫切れのため、入力は不要です。「期限切れ数を送信」を押してください。</div>';
-  h += groups.map(g => slotHead(g.slot) + '<div class="card" style="padding:4px 16px">' + g.list.map(([it, i]) =>
-    `<div class="row"><div class="nm">${esc(g.slot ? baseName(it.name) : it.name)}<div class="small">在庫数 ${it.stock}</div></div>
-     <input type="number" inputmode="numeric" min="0" step="1" placeholder="個数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>').join('');
+  h += groups.map(g => {
+    const head = (g.recv ? esc(g.recv) + ' 受取分' : '受取時間未設定') + (g.store ? '　' + esc(g.store) : '');
+    const badge = g.st.text ? `<span class="badge ${g.st.cls}">${esc(g.st.text)}</span>` : '';
+    return `<h2>${head}${badge}</h2>` + (g.exp ? `<div class="gsub">賞味期限 ${esc(fmtExp(g.exp))}</div>` : '') +
+      `<div class="card ${g.st.cls === 'due' ? 'due' : ''}" style="padding:4px 16px">` + g.list.map(([it, i]) =>
+      `<div class="row"><div class="nm">${esc(baseName(it.name))}<div class="small">在庫数 ${it.stock}${it.remain != null ? '・送信済み' : ''}</div></div>
+       <input type="number" inputmode="numeric" min="0" step="1" placeholder="個数" value="${esc(closeValue(it))}" data-i="${i}" oninput="draftIn(this)"></div>`).join('') + '</div>';
+  }).join('');
   return h;
 }
 function draftIn(el) { const it = S.day.items[+el.dataset.i]; (S.draft[S.date] = S.draft[S.date] || {})[it.name] = el.value; }
@@ -332,16 +382,20 @@ async function submitClose() {
   if (S.busy) return;
   const entries = [], over = [];
   const pend = pendingOut();
+  let typed = 0, live = 0;
   for (const it of S.day.items) {
     if (it.soldOut || pend.has(it.name)) { entries.push({ item: it.name, remain: 0 }); continue; } // 在庫切れは期限切れ0
+    live++;
     const v = String(closeValue(it)).trim();
-    if (!/^\d+$/.test(v)) return toast(`「${it.name}」の期限切れ数を入力してください`);
-    if (+v > it.stock) over.push(it.name);
-    entries.push({ item: it.name, remain: +v });
+    if (v === '') continue; // 未入力は送信しない
+    if (!/^\d+$/.test(v)) return toast(`「${baseName(it.name)}」の期限切れ数は0以上の整数で入力してください`);
+    if (+v > it.stock) over.push(baseName(it.name));
+    entries.push({ item: it.name, remain: +v }); typed++;
   }
-  let msg = `${md(S.date)} の期限切れ数を送信します。`;
+  if (live && !typed) return toast('期限切れ数を入力してください');
+  let msg = `${md(S.date)} の期限切れ数を送信します（${typed}品目）。`;
+  if (typed < live) msg += '\n未入力の品目は送信されません。';
   if (over.length) msg += '\n\n在庫数より多い期限切れ数があります：\n' + over.map(n => '・' + n).join('\n');
-  if (S.day.closed) msg += '\n\n送信済みのデータは上書きされます。';
   if (!confirm(msg)) return;
   const s = S.session, date = S.date;
   const args = [s.tid, s.pin, date, entries, s.staff, Date.now()];
@@ -351,7 +405,6 @@ async function submitClose() {
     delete S.draft[date]; toast('送信しました');
   } catch (e) {
     if (isNetErr(e)) {
-      setQueue(queue().filter(j => !(j.kind === 'close' && j.tid === s.tid && j.date === date)));
       enqueue({ fn: 'submitClose', args, kind: 'close', tid: s.tid, date });
       toast('通信できないため端末に保存しました。回復後に自動送信します');
     } else toast(errMsg(e));
@@ -387,11 +440,42 @@ function renderAdminList() {
       <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button></div></div>`).join('')
       : '<div class="card empty">大会が登録されていません</div>') + '</div>';
 }
+/* 管理画面は「受取（店舗×受取時間×賞味期限）」単位で品目をまとめて編集する */
+function newGroup() { return { store: '', recv: '', exp: '', items: [{ name: '', stock: '' }] }; }
+function toForm(t) {
+  return { id: t.id, name: t.name, staffPin: t.staffPin, active: t.active, days: t.days.map(d => {
+    const groups = [];
+    d.items.forEach(it => {
+      const recv = it.recv || slotOf(it.name), exp = String(it.exp || '').replace(' ', 'T'), store = it.store || '';
+      let g = groups.find(x => x.store === store && x.recv === recv && x.exp === exp);
+      if (!g) groups.push(g = { store, recv, exp, items: [] });
+      const nm = recv && String(it.name).endsWith('（' + recv + '）') ? it.name.slice(0, -(recv.length + 2)) : it.name;
+      g.items.push({ name: nm, stock: it.stock });
+    });
+    return { date: d.date, groups: groups.length ? groups : [newGroup()] };
+  }) };
+}
+function fromForm(f) {
+  return { id: f.id, name: f.name, staffPin: f.staffPin, active: f.active, days: f.days.map(d => {
+    const flat = [];
+    d.groups.forEach(g => g.items.forEach(it => { if (String(it.name).trim() || String(it.stock).trim()) flat.push({ base: String(it.name).trim(), stock: it.stock, store: g.store.trim(), recv: g.recv, exp: g.exp }); }));
+    const cnt = k => flat.filter(x => k(x)).length;
+    flat.forEach(x => {
+      let n = x.base;
+      if (cnt(y => y.base === x.base) > 1) {
+        if (cnt(y => y.base === x.base && y.recv === x.recv) > 1 && x.store) n += '（' + x.store + '）';
+        if (x.recv) n += '（' + x.recv + '）';
+      }
+      x.name = n;
+    });
+    return { date: d.date, items: flat.map(x => ({ name: x.name, stock: x.stock, store: x.store, recv: x.recv, exp: x.exp })) };
+  }) };
+}
 function editT(i) {
-  S.form = i < 0 ? { id: '', name: '', staffPin: '', active: true, days: [{ date: S.today || '', items: [{ name: '', stock: '' }] }] } : clone(S.admin.list[i]);
+  S.form = i < 0 ? { id: '', name: '', staffPin: '', active: true, days: [{ date: S.today || '', groups: [newGroup()] }] } : toForm(clone(S.admin.list[i]));
   S.view = 'adminEdit'; render();
 }
-function copyT(i) { const f = clone(S.admin.list[i]); f.id = ''; f.name += '（コピー）'; S.form = f; S.view = 'adminEdit'; render(); }
+function copyT(i) { const f = toForm(clone(S.admin.list[i])); f.id = ''; f.name += '（コピー）'; S.form = f; S.view = 'adminEdit'; render(); }
 function cancelEdit() { if (!confirm('編集内容を破棄しますか？')) return; S.form = null; S.view = 'adminList'; render(); }
 function renderAdminEdit() {
   const f = S.form;
@@ -400,17 +484,25 @@ function renderAdminEdit() {
     <label>スタッフPIN（数字4〜8桁）</label><input id="fPin" inputmode="numeric" value="${esc(f.staffPin)}">
     <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>有効（スタッフのログイン画面に表示する）</label></div>
     <div class="card"><div style="font-weight:700">軽食シートから取り込み</div>
-    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。</div>
+    <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗と受取時間はシートから読み取ります。</div>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="fSplit" checked>受取時間帯ごとに分ける（例：めんまよ（10:30）／めんまよ（18:00））。外すと同じ日の受取枠を合算します。</label>
+    <label>賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
     <label class="btn" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;color:#fff;font-size:16px;font-weight:600">CSVファイルを選んで取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this)"></label>
     <textarea id="fImport" rows="3" placeholder="またはここに貼り付け"></textarea>
     <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet()">貼り付けた内容を取り込む</button></div>
-    <h2>開催日ごとの軽食と在庫数</h2>` +
+    <h2>開催日ごとの受取・品目・在庫数</h2>` +
     f.days.map((d, di) => `<div class="card" data-di="${di}">
-      <div class="irow" style="margin-top:0"><input type="date" class="dDate" value="${esc(d.date)}" style="flex:1;min-width:0"><button class="btn-sub" onclick="fAct('delDay',${di})">日を削除</button></div>
-      <div class="small" style="margin-top:12px">品目名 ／ 在庫数</div>` +
-      d.items.map((it, ii) => `<div class="irow"><input class="iname" value="${esc(it.name)}" placeholder="品目名"><input class="istock" type="number" inputmode="numeric" min="0" step="1" value="${esc(it.stock)}" placeholder="在庫数"><button class="btn-sub" onclick="fAct('delItem',${di},${ii})">×</button></div>`).join('') +
-      `<div class="btns"><button class="btn-sub" onclick="fAct('addItem',${di})">＋ 品目を追加</button>${di > 0 ? `<button class="btn-sub" onclick="fAct('copyPrev',${di})">前日の品目をコピー</button>` : ''}</div></div>`).join('') +
+      <div class="irow" style="margin-top:0"><input type="date" class="dDate" value="${esc(d.date)}" style="flex:1;min-width:0"><button class="btn-sub" onclick="fAct('delDay',${di})">日を削除</button></div>` +
+      d.groups.map((g, gi) => `<div class="grp" data-gi="${gi}">
+        <div class="ghead">
+          <div class="full"><label>店舗</label><input class="gStore" value="${esc(g.store)}" placeholder="例：ごりちゃん"></div>
+          <div><label>受取時間</label><input class="gRecv" type="time" value="${esc(g.recv)}"></div>
+          <div><label>賞味期限</label><input class="gExp" type="datetime-local" value="${esc(g.exp)}"></div>
+        </div>
+        <div class="small" style="margin-top:10px">品目名 ／ 在庫数</div>` +
+        g.items.map((it, ii) => `<div class="irow"><input class="iname" value="${esc(it.name)}" placeholder="品目名"><input class="istock" type="number" inputmode="numeric" min="0" step="1" value="${esc(it.stock)}" placeholder="在庫数"><button class="btn-sub" onclick="fAct('delItem',${di},${gi},${ii})">×</button></div>`).join('') +
+        `<div class="btns"><button class="btn-sub" onclick="fAct('addItem',${di},${gi})">＋ 品目を追加</button><button class="btn-sub" onclick="fAct('delGroup',${di},${gi})">受取を削除</button></div></div>`).join('') +
+      `<div class="btns"><button class="btn-sub" onclick="fAct('addGroup',${di})">＋ 受取を追加</button>${di > 0 ? `<button class="btn-sub" onclick="fAct('copyPrev',${di})">前日の内容をコピー</button>` : ''}</div></div>`).join('') +
     '<button class="btn-sub" style="width:100%" onclick="fAct(\'addDay\')">＋ 開催日を追加</button>';
   showBar(`<button class="btn" ${S.busy ? 'disabled' : ''} onclick="saveT()">保存</button>`);
 }
@@ -419,24 +511,36 @@ function readForm() {
   f.name = val('fName'); f.staffPin = val('fPin'); f.active = document.getElementById('fActive').checked;
   f.days = [...document.querySelectorAll('[data-di]')].map(el => ({
     date: el.querySelector('.dDate').value,
-    items: [...el.querySelectorAll('.irow')].filter(r => r.querySelector('.iname'))
-      .map(r => ({ name: r.querySelector('.iname').value, stock: r.querySelector('.istock').value })),
+    groups: [...el.querySelectorAll('[data-gi]')].map(g => ({
+      store: g.querySelector('.gStore').value, recv: g.querySelector('.gRecv').value, exp: g.querySelector('.gExp').value,
+      items: [...g.querySelectorAll('.irow')].map(r => ({ name: r.querySelector('.iname').value, stock: r.querySelector('.istock').value })),
+    })),
   }));
 }
-function fAct(a, di, ii) {
+/** 前日の内容をコピーするとき、賞味期限の日付を開催日の差だけずらす */
+function shiftExp(exp, from, to) {
+  const d = parseExp(exp); if (!d || !from || !to) return exp;
+  const diff = Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 864e5);
+  d.setDate(d.getDate() + diff);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d);
+}
+function copyGroups(src, from, to) { return clone(src).map(g => ({ ...g, exp: shiftExp(g.exp, from, to) })); }
+function fAct(a, di, gi, ii) {
   readForm();
   const days = S.form.days;
-  if (a === 'addItem') days[di].items.push({ name: '', stock: '' });
-  if (a === 'delItem') { days[di].items.splice(ii, 1); if (!days[di].items.length) days[di].items.push({ name: '', stock: '' }); }
-  if (a === 'copyPrev') days[di].items = clone(days[di - 1].items);
+  if (a === 'addItem') days[di].groups[gi].items.push({ name: '', stock: '' });
+  if (a === 'delItem') { const it = days[di].groups[gi].items; it.splice(ii, 1); if (!it.length) it.push({ name: '', stock: '' }); }
+  if (a === 'addGroup') days[di].groups.push(newGroup());
+  if (a === 'delGroup') { if (!confirm('この受取を削除しますか？')) return; days[di].groups.splice(gi, 1); if (!days[di].groups.length) days[di].groups.push(newGroup()); }
+  if (a === 'copyPrev') days[di].groups = copyGroups(days[di - 1].groups, days[di - 1].date, days[di].date);
   if (a === 'delDay') { if (days.length === 1) return toast('開催日は1日以上必要です'); if (!confirm('この開催日を削除しますか？')) return; days.splice(di, 1); }
-  if (a === 'addDay') { const last = days[days.length - 1]; days.push({ date: last && last.date ? addDays(last.date, 1) : (S.today || ''), items: last ? clone(last.items) : [{ name: '', stock: '' }] }); }
+  if (a === 'addDay') { const last = days[days.length - 1]; const date = last && last.date ? addDays(last.date, 1) : (S.today || ''); days.push({ date, groups: last ? copyGroups(last.groups, last.date, date) : [newGroup()] }); }
   render();
 }
 async function saveT() {
   if (S.busy) return;
   readForm(); S.busy = true; render();
-  try { S.admin.list = await call('adminSave', S.admin.pin, S.form); S.form = null; S.view = 'adminList'; toast('保存しました'); }
+  try { S.admin.list = await call('adminSave', S.admin.pin, fromForm(S.form)); S.form = null; S.view = 'adminList'; toast('保存しました'); }
   catch (e) { toast(netMsg(e)); }
   S.busy = false; render();
 }
@@ -464,7 +568,7 @@ function mdToIso(md, today) {
   if (new Date(y, m - 1, d) - base < -120 * 864e5) y++;
   return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
 }
-function importKeishoku(text, today, split) {
+function importKeishoku(text, today, split, expH) {
   const rows = parseTable(text);
   const isMd = s => /^\d{1,2}\/\d{1,2}$/.test(s || '');
   const hi = rows.findIndex(r => r.some(isMd));
@@ -486,23 +590,24 @@ function importKeishoku(text, today, split) {
     slots.forEach(s => {
       const name = r[s.col] || '', qty = String(r[s.col + 1] || '').replace(/,/g, '');
       if (!name || name === '計' || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
-      const key = store + '\u0000' + name + (split ? '\u0000' + s.time : '');
-      const day = days[s.date] = days[s.date] || new Map();
-      const e = day.get(key) || { store, name, time: split ? s.time : '', stock: 0 };
-      e.stock += +qty; day.set(key, e);
+      const recv = split ? s.time : '';
+      const groups = days[s.date] = days[s.date] || [];
+      let g = groups.find(x => x.rawStore === store && x.recv === recv);
+      if (!g) groups.push(g = { rawStore: store, store: shortStore(store), recv, exp: '', items: [] });
+      const nm = name.length <= 2 ? inParen(store) + ' ' + name : name;
+      const it = g.items.find(x => x.name === nm);
+      if (it) it.stock += +qty; else g.items.push({ name: nm, stock: +qty });
     });
     if (r.some(c => /^total$/i.test(c))) store = null;
   }
   const dates = Object.keys(days).sort();
   if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
-  return dates.map(date => {
-    const list = [...days[date].values()].sort((a, b) => toMin(a.time) - toMin(b.time));
-    const count = {}; list.forEach(e => { count[e.name + e.time] = (count[e.name + e.time] || 0) + 1; });
-    return { date, items: list.map(e => ({
-      name: (e.name.length <= 2 ? inParen(e.store) + ' ' + e.name : (count[e.name + e.time] > 1 ? e.name + '（' + shortStore(e.store) + '）' : e.name)) + (e.time ? '（' + e.time + '）' : ''),
-      stock: e.stock,
-    })) };
-  });
+  const h = Number(expH);
+  return dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => {
+    let exp = '';
+    if (g.recv && h > 0) { const d = new Date(date + 'T' + g.recv.padStart(5, '0') + ':00'); d.setMinutes(d.getMinutes() + Math.round(h * 60)); exp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hhmm(d); }
+    return { store: g.store, recv: g.recv, exp, items: g.items };
+  }) }));
 }
 async function importFile(input) {
   const f = input.files && input.files[0];
@@ -520,9 +625,10 @@ function importSheet() {
   const text = val('fImport');
   if (!text.trim()) return toast('軽食シートの内容を貼り付けてください');
   let days;
-  try { days = importKeishoku(text, S.today, document.getElementById('fSplit').checked); } catch (e) { return toast(errMsg(e)); }
-  const n = days.reduce((a, d) => a + d.items.length, 0);
-  if (!confirm(`${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.items.length + '品目').join('\n') + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
+  try { days = importKeishoku(text, S.today, document.getElementById('fSplit').checked, val('fExpH')); } catch (e) { return toast(errMsg(e)); }
+  const cntD = d => d.groups.reduce((a, g) => a + g.items.length, 0);
+  const n = days.reduce((a, d) => a + cntD(d), 0);
+  if (!confirm(`${days.length}日分・${n}品目を読み取りました。\n` + days.map(d => md(d.date) + ' ' + d.groups.length + '受取・' + cntD(d) + '品目').join('\n') + '\n\n現在の開催日と軽食の設定を置き換えますか？')) return;
   S.form.days = days;
   render();
   toast('取り込みました。内容を確認して保存してください');
@@ -530,6 +636,7 @@ function importSheet() {
 
 /* ===== 自動更新（他スタッフの記録を反映） ===== */
 setInterval(() => { if (S.view === 'main' && S.tab === 'record' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
+setInterval(() => { const a = document.activeElement; if (S.view === 'main' && !S.busy && !(a && a.tagName === 'INPUT')) render(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'main') { flush(); loadDay(true); } });
 
 init();
