@@ -88,6 +88,10 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .rcv .its{font-size:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);line-height:1.7}
 .rcv .its span{display:inline-block;margin-right:12px}
 .rcv .its small{color:#6b7280;font-size:12px}
+.trow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sw{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;white-space:nowrap;margin:0}
+.sw input{width:20px;height:20px;margin:0}
+.hiddenT{background:#f3f4f6;color:#6b7280}
 .rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
 .rcv.past{opacity:.6}
 </style>
@@ -230,7 +234,7 @@ function renderLogin() {
   hideBar();
   const opts = S.tournaments.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
   app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card">
-    ${S.tournaments.length ? '' : '<div class="notice warn">有効な大会がありません。管理者メニューから大会を登録してください。</div>'}
+    ${S.tournaments.length ? '' : '<div class="notice warn">表示中の大会がありません。管理者メニューで大会を「表示」にしてください。</div>'}
     <label>大会</label><select id="lgT">${opts}</select>
     <label>スタッフPIN</label><input id="lgP" type="password" inputmode="numeric" autocomplete="off">
     <label>名前</label><input id="lgN" value="${esc(LS.get('kStaffName', ''))}" placeholder="例：佐藤">
@@ -481,11 +485,19 @@ function renderAdminList() {
   const list = S.admin.list;
   app.innerHTML = `<div class="header"><h1>大会設定</h1><button class="link" onclick="backToLogin()">終了</button></div>
     <button class="btn" onclick="editT(-1)">＋ 新しい大会を作成</button><div style="margin-top:12px">` +
-    (list.length ? list.map((t, i) => `<div class="card"><div style="font-weight:700">${esc(t.name)}</div>
-      <div class="small">${t.active ? '有効' : '無効'}・スタッフPIN ${esc(t.staffPin)}</div>
+    '<div class="small" style="margin-top:8px">「表示」の大会だけがスタッフのログイン画面に出ます。終わった大会や準備中の大会は「非表示」にしてください。</div>' +
+    (list.length ? list.map((t, i) => `<div class="card ${t.active ? '' : 'hiddenT'}"><div class="trow"><div style="font-weight:700">${esc(t.name)}</div>
+      <label class="sw"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="setActive(${i}, this.checked)"><span>${t.active ? '表示' : '非表示'}</span></label></div>
+      <div class="small">スタッフPIN ${esc(t.staffPin)}</div>
       <div class="small" style="margin-top:6px">${t.days.map(d => md(d.date) + ' ' + d.items.length + '品目').join('　') || '開催日なし'}</div>
       <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button></div></div>`).join('')
       : '<div class="card empty">大会が登録されていません</div>') + '</div>';
+}
+async function setActive(i, on) {
+  const t = S.admin.list[i];
+  try { S.admin.list = await call('adminSetActive', S.admin.pin, t.id, on); toast(t.name + 'を' + (on ? '表示' : '非表示') + 'にしました'); }
+  catch (e) { toast(netMsg(e)); }
+  render();
 }
 /* 管理画面は「受取（店舗×受取時間×賞味期限）」単位で品目をまとめて編集する */
 function newGroup() { return { store: '', recv: '', exp: '', method: '', addr: '', tel: '', items: [{ name: '', stock: '' }] }; }
@@ -531,7 +543,7 @@ function renderAdminEdit() {
   app.innerHTML = `<div class="header"><h1>${f.id ? '大会を編集' : '新しい大会'}</h1><button class="link" onclick="cancelEdit()">キャンセル</button></div>
     <div class="card"><label>大会名</label><input id="fName" value="${esc(f.name)}" placeholder="例：JOPT 2026 Fukuoka #01">
     <label>スタッフPIN（数字4〜8桁）</label><input id="fPin" inputmode="numeric" value="${esc(f.staffPin)}">
-    <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>有効（スタッフのログイン画面に表示する）</label></div>
+    <label class="check"><input type="checkbox" id="fActive" ${f.active ? 'checked' : ''}>表示する（スタッフのログイン画面に出す）</label></div>
     <div class="card"><div style="font-weight:700">軽食シートから取り込み</div>
     <div class="small" style="margin-top:4px">「軽食」シートのCSVファイルを選ぶと、全開催日の軽食リストを一括作成します。シートをコピーして下の欄に貼り付けても取り込めます。店舗・受取時間と、店名の下（B列）の受取方法（「配達」「店舗受け取り」など）・電話番号・「住所：〜」の行をシートから読み取ります。各店舗の「計」の行の下に、品目名の欄へ「賞味期限」、個数の欄へ時刻（例：15:00、日をまたぐ場合は 10/31 9:00、その日の終わりまでなら「当日中」）を書くと賞味期限も取り込みます。一部の品目だけ期限が違う場合は、品目名の欄へ「賞味期限（高菜）」のように品目名を付けた行を追加します。日付の左に「受け取り時間」（2行目に初日・朝・夜・最終日などの見出し）と「賞味期限」の列がある形式にも対応します。店舗の行の受取時間・賞味期限（8時間・当日中など）を読み取り、賞味期限の列の2行目以降に「クリームパンのみ当日中」と書くとその品目だけ別の期限になります。「Total」の行より下は読み取りません。同様に「受取」行で店舗ごとの受取時間を上書きできます。</div>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="fSplit" checked>受取時間帯ごとに分ける（例：めんまよ（10:30）／めんまよ（18:00））。外すと同じ日の受取枠を合算します。</label>
