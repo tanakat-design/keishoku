@@ -78,7 +78,8 @@ function setup() {
 
 /**
  * 日次残数シートの期限切れ数（F列）を自動で色分けする（条件付き書式）。
- * 薄い赤：在庫数−消費数（＝期限切れ数）が在庫数の半分以上 / 薄い緑：期限切れ数が0
+ * 薄い赤：在庫数−消費数（＝期限切れ数）が在庫数の半分以上 / 薄い青：期限切れ数が0 / 薄い緑：それ以外
+ * （上のルールが優先される）
  */
 function closeColors_(sh) {
   if (!sh || !sh.setConditionalFormatRules) return;
@@ -86,10 +87,13 @@ function closeColors_(sh) {
   const red = SpreadsheetApp.newConditionalFormatRule()
     .whenFormulaSatisfied('=AND(ISNUMBER($E2),ISNUMBER($G2),$E2>0,$E2-$G2>=$E2/2)')
     .setBackground('#f4cccc').setRanges([range]).build();
-  const green = SpreadsheetApp.newConditionalFormatRule()
+  const blue = SpreadsheetApp.newConditionalFormatRule()
     .whenFormulaSatisfied('=AND(ISNUMBER($F2),$F2=0)')
+    .setBackground('#cfe2f3').setRanges([range]).build();
+  const green = SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=ISNUMBER($F2)')
     .setBackground('#d9ead3').setRanges([range]).build();
-  sh.setConditionalFormatRules([red, green]);
+  sh.setConditionalFormatRules([red, blue, green]);
 }
 
 function showAdminPin() {
@@ -347,7 +351,10 @@ function rows_(name) {
 }
 
 function ensureRows_(sh, lastNeeded) {
-  if (lastNeeded > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), lastNeeded - sh.getMaxRows() + 100);
+  if (lastNeeded > sh.getMaxRows()) {
+    sh.insertRowsAfter(sh.getMaxRows(), lastNeeded - sh.getMaxRows() + 100);
+    if (sh.getName() === SH.CLOSE) closeColors_(sh); // 行を増やしたら色分けの範囲も広げる
+  }
 }
 
 function append_(name, rows) {
