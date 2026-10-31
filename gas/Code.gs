@@ -70,9 +70,26 @@ function setup() {
     (TEXT_COLS[name] || []).forEach(function (c) { sh.getRange(1, c, sh.getMaxRows(), 1).setNumberFormat('@'); });
     (TIME_COLS[name] || []).forEach(function (c) { sh.getRange(2, c, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss'); });
   });
+  closeColors_(book.getSheetByName(SH.CLOSE));
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('ADMIN_PIN')) p.setProperty('ADMIN_PIN', newPin_());
   showAdminPin();
+}
+
+/**
+ * 日次残数シートの期限切れ数（F列）を自動で色分けする（条件付き書式）。
+ * 薄い赤：在庫数−消費数（＝期限切れ数）が在庫数の半分以上 / 薄い緑：期限切れ数が0
+ */
+function closeColors_(sh) {
+  if (!sh || !sh.setConditionalFormatRules) return;
+  const range = sh.getRange('F2:F');
+  const red = SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=AND(ISNUMBER($E2),ISNUMBER($G2),$E2>0,$E2-$G2>=$E2/2)')
+    .setBackground('#f4cccc').setRanges([range]).build();
+  const green = SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=AND(ISNUMBER($F2),$F2=0)')
+    .setBackground('#d9ead3').setRanges([range]).build();
+  sh.setConditionalFormatRules([red, green]);
 }
 
 function showAdminPin() {
