@@ -71,6 +71,7 @@ function setup() {
     (TIME_COLS[name] || []).forEach(function (c) { sh.getRange(2, c, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss'); });
   });
   closeColors_(book.getSheetByName(SH.CLOSE));
+  tournaments_().forEach(function (t) { tournSheet_(t.id, t.name); }); // 既存の大会にも集計シートを用意
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('ADMIN_PIN')) p.setProperty('ADMIN_PIN', newPin_());
   showAdminPin();
@@ -253,6 +254,7 @@ function adminSave(pin, f) {
     });
     replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date()]]);
     replace_(SH.STOCK, function (r) { return str_(r[0]) === id; }, stockRows);
+    try { tournSheet_(id, name); } catch (e) { console.warn('大会シートを作成できませんでした: ' + e); } // 失敗しても保存は有効
     return adminList(pin);
   });
 }
@@ -270,6 +272,73 @@ function adminSetActive(pin, id, active) {
     }
     throw new Error('大会が見つかりません');
   });
+}
+
+/* ---------- 大会ごとの集計シート ---------- */
+
+/**
+ * 大会ごとのシート「残数_大会名」を用意する（なければ作成、大会名が変わればシート名も変更）。
+ * 中身は数式で「日次残数」から引くため、期限切れ数が送信されるたびに自動で更新される。
+ *   左：その大会の日次残数の一覧（開催日 / 品目（まとめ） / 品目 / 在庫数 / 期限切れ数 / 在庫切れ時刻）
+ *   右：品目ごとの集計（受取時間などの末尾の（ ）を外した品目名でまとめる）
+ *       記録回数 / 期限切れ回数（期限切れ数が1以上の回数）/ 期限切れ数合計 / 平均期限切れ数（記録1回あたり）/ 期限切れ率（期限切れ数÷在庫数）
+ * シートは E1 の大会IDで識別する。
+ */
+function tournSheet_(id, name) {
+  const book = book_();
+  if (!book.getSheets) return;
+  const fixed = Object.keys(HEAD).map(function (k) { return SH[k] || k; });
+  let sh = book.getSheets().filter(function (x) {
+    return fixed.indexOf(x.getName()) < 0 && str_(x.getRange('E1').getValue()) === id;
+  })[0];
+  const want = tournSheetName_(book, name, sh);
+  if (!sh) {
+    sh = book.insertSheet(want);
+    const src = "'" + SH.CLOSE + "'!";
+    sh.getRange('A1:E1').setValues([['大会', name, '', '大会ID', id]]);
+    sh.getRange('A1').setFontWeight('bold');
+    sh.getRange('D1:E1').setFontColor('#9aa0a6');
+    sh.getRange('A3:F3').setValues([['開催日', '品目（まとめ）', '品目', '在庫数', '期限切れ数', '在庫切れ時刻']]);
+    sh.getRange('H3:M3').setValues([['品目（まとめ）', '記録回数', '期限切れ回数', '期限切れ数合計', '平均期限切れ数', '期限切れ率']]);
+    sh.getRange('A3:M3').setFontWeight('bold').setBackground('#f1f3f4');
+    sh.getRange('G3').setBackground(null);
+    sh.getRange('A4').setFormula('=IFERROR(SORT(FILTER({' + src + 'C2:C, REGEXREPLACE(' + src + 'D2:D, "(（[^）]*）)+$", ""), ' + src + 'D2:D, ' + src + 'E2:E, ' + src + 'F2:F, ' + src + 'H2:H}, ' + src + 'A2:A = $E$1), 1, TRUE, 3, TRUE), "")');
+    sh.getRange('H4').setFormula('=IFERROR(LET(n, UNIQUE(FILTER(B4:B, B4:B <> "")), ' +
+      'SORT(HSTACK(n, ' +
+      'MAP(n, LAMBDA(x, COUNTIF(B4:B, x))), ' +
+      'MAP(n, LAMBDA(x, COUNTIFS(B4:B, x, E4:E, ">0"))), ' +
+      'MAP(n, LAMBDA(x, SUMIF(B4:B, x, E4:E))), ' +
+      'MAP(n, LAMBDA(x, AVERAGEIF(B4:B, x, E4:E))), ' +
+      'MAP(n, LAMBDA(x, IFERROR(SUMIF(B4:B, x, E4:E) / SUMIF(B4:B, x, D4:D), 0)))), 3, FALSE, 4, FALSE)), "")');
+    sh.getRange('L4:L').setNumberFormat('0.0');
+    sh.getRange('M4:M').setNumberFormat('0%');
+    sh.setFrozenRows(3);
+    if (sh.setColumnWidth) { sh.setColumnWidth(2, 160); sh.setColumnWidth(3, 200); sh.setColumnWidth(7, 24); sh.setColumnWidth(8, 160); }
+    if (sh.setConditionalFormatRules) {
+      const range = sh.getRange('E4:E');
+      const rule = function (f, c) { return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(f).setBackground(c).setRanges([range]).build(); };
+      sh.setConditionalFormatRules([
+        rule('=AND(ISNUMBER($D4),ISNUMBER($E4),$D4>0,$E4>=$D4/2)', '#f4cccc'), // 期限切れ数が在庫数の半分以上
+        rule('=AND(ISNUMBER($E4),$E4=0)', '#cfe2f3'),                         // 期限切れ0
+        rule('=ISNUMBER($E4)', '#d9ead3'),                                     // それ以外
+      ]);
+    }
+  } else if (sh.getName() !== want) {
+    sh.setName(want);
+  }
+  if (str_(sh.getRange('B1').getValue()) !== name) sh.getRange('B1').setValue(name);
+  return sh;
+}
+
+/** シート名に使えない文字を除き、他のシートと重ならない名前にする */
+function tournSheetName_(book, name, self) {
+  const base = ('残数_' + String(name).replace(/[\[\]\*\?\/\\:']/g, ' ').trim()).slice(0, 90);
+  let n = base, k = 2;
+  while (true) {
+    const other = book.getSheetByName(n);
+    if (!other || (self && other.getSheetId && self.getSheetId && other.getSheetId() === self.getSheetId())) return n;
+    n = base + '（' + (k++) + '）';
+  }
 }
 
 /* ---------- 内部処理 ---------- */
