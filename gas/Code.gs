@@ -276,58 +276,89 @@ function adminSetActive(pin, id, active) {
 
 /* ---------- 大会ごとの集計シート ---------- */
 
+const TOURN_LAYOUT = '集計v3'; // レイアウトを変えたら値を変える（既存シートを作り直す）
+
 /**
  * 大会ごとのシート「残数_大会名」を用意する（なければ作成、大会名が変わればシート名も変更）。
- * 中身は数式で「日次残数」から引くため、期限切れ数が送信されるたびに自動で更新される。
- *   左：その大会の日次残数の一覧（開催日 / 品目（まとめ） / 品目 / 在庫数 / 期限切れ数 / 在庫切れ時刻）
- *   右：品目ごとの集計（受取時間などの末尾の（ ）を外した品目名でまとめる）
- *       記録回数 / 期限切れ回数（期限切れ数が1以上の回数）/ 期限切れ数合計 / 平均期限切れ数（記録1回あたり）/ 期限切れ率（期限切れ数÷在庫数）
- * シートは E1 の大会IDで識別する。
+ * 中身は数式で「日次残数」「在庫設定」から引くため、期限切れ数が送信されるたびに自動で更新される。
+ *   A〜G：その大会の日次残数の一覧（開催日 / 受取時間 / 品目（まとめ） / 品目 / 在庫数 / 期限切れ数 / 在庫切れ時刻）
+ *   I〜N：品目ごとの集計（受取時間などの末尾の（ ）を外した品目名でまとめる）
+ *   P〜V：品目×受取時間ごとの集計
+ *   集計の列：記録回数 / 期限切れ回数（期限切れ数が1以上の回数）/ 期限切れ数合計 / 平均期限切れ数（記録1回あたり）/ 期限切れ率（期限切れ数÷在庫数）
+ *   期限切れ率が50%を超える行は薄い赤。
+ * シートは E1 の大会IDで識別し、F1 のレイアウト番号が古ければ作り直す。
  */
 function tournSheet_(id, name) {
   const book = book_();
   if (!book.getSheets) return;
-  const fixed = Object.keys(HEAD).map(function (k) { return SH[k] || k; });
+  const fixed = Object.keys(HEAD);
   let sh = book.getSheets().filter(function (x) {
     return fixed.indexOf(x.getName()) < 0 && str_(x.getRange('E1').getValue()) === id;
   })[0];
   const want = tournSheetName_(book, name, sh);
-  if (!sh) {
-    sh = book.insertSheet(want);
-    const src = "'" + SH.CLOSE + "'!";
-    sh.getRange('A1:E1').setValues([['大会', name, '', '大会ID', id]]);
-    sh.getRange('A1').setFontWeight('bold');
-    sh.getRange('D1:E1').setFontColor('#9aa0a6');
-    sh.getRange('A3:F3').setValues([['開催日', '品目（まとめ）', '品目', '在庫数', '期限切れ数', '在庫切れ時刻']]);
-    sh.getRange('H3:M3').setValues([['品目（まとめ）', '記録回数', '期限切れ回数', '期限切れ数合計', '平均期限切れ数', '期限切れ率']]);
-    sh.getRange('A3:M3').setFontWeight('bold').setBackground('#f1f3f4');
-    sh.getRange('G3').setBackground(null);
-    sh.getRange('A4').setFormula('=IFERROR(SORT(FILTER({' + src + 'C2:C, REGEXREPLACE(' + src + 'D2:D, "(（[^）]*）)+$", ""), ' + src + 'D2:D, ' + src + 'E2:E, ' + src + 'F2:F, ' + src + 'H2:H}, ' + src + 'A2:A = $E$1), 1, TRUE, 3, TRUE), "")');
-    sh.getRange('H4').setFormula('=IFERROR(LET(n, UNIQUE(FILTER(B4:B, B4:B <> "")), ' +
-      'SORT(HSTACK(n, ' +
-      'MAP(n, LAMBDA(x, COUNTIF(B4:B, x))), ' +
-      'MAP(n, LAMBDA(x, COUNTIFS(B4:B, x, E4:E, ">0"))), ' +
-      'MAP(n, LAMBDA(x, SUMIF(B4:B, x, E4:E))), ' +
-      'MAP(n, LAMBDA(x, AVERAGEIF(B4:B, x, E4:E))), ' +
-      'MAP(n, LAMBDA(x, IFERROR(SUMIF(B4:B, x, E4:E) / SUMIF(B4:B, x, D4:D), 0)))), 3, FALSE, 4, FALSE)), "")');
-    sh.getRange('L4:L').setNumberFormat('0.0');
-    sh.getRange('M4:M').setNumberFormat('0%');
-    sh.setFrozenRows(3);
-    if (sh.setColumnWidth) { sh.setColumnWidth(2, 160); sh.setColumnWidth(3, 200); sh.setColumnWidth(7, 24); sh.setColumnWidth(8, 160); }
-    if (sh.setConditionalFormatRules) {
-      const range = sh.getRange('E4:E');
-      const rule = function (f, c) { return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(f).setBackground(c).setRanges([range]).build(); };
-      sh.setConditionalFormatRules([
-        rule('=AND(ISNUMBER($D4),ISNUMBER($E4),$D4>0,$E4>=$D4/2)', '#f4cccc'), // 期限切れ数が在庫数の半分以上
-        rule('=AND(ISNUMBER($E4),$E4=0)', '#cfe2f3'),                         // 期限切れ0
-        rule('=ISNUMBER($E4)', '#d9ead3'),                                     // それ以外
-      ]);
-    }
-  } else if (sh.getName() !== want) {
-    sh.setName(want);
-  }
+  if (!sh) sh = book.insertSheet(want);
+  else if (sh.getName() !== want) sh.setName(want);
+  if (str_(sh.getRange('F1').getValue()) !== TOURN_LAYOUT) buildTournSheet_(sh, id, name);
   if (str_(sh.getRange('B1').getValue()) !== name) sh.getRange('B1').setValue(name);
   return sh;
+}
+
+function buildTournSheet_(sh, id, name) {
+  sh.clear();
+  if (sh.setConditionalFormatRules) sh.setConditionalFormatRules([]);
+  const c = "'" + SH.CLOSE + "'!", st = "'" + SH.STOCK + "'!";
+  sh.getRange('A1:F1').setValues([['大会', name, '', '大会ID', id, TOURN_LAYOUT]]);
+  sh.getRange('A1').setFontWeight('bold');
+  sh.getRange('D1:F1').setFontColor('#9aa0a6');
+  const stat = ['記録回数', '期限切れ回数', '期限切れ数合計', '平均期限切れ数', '期限切れ率'];
+  sh.getRange('A3:G3').setValues([['開催日', '受取時間', '品目（まとめ）', '品目', '在庫数', '期限切れ数', '在庫切れ時刻']]);
+  sh.getRange('I2').setValue('品目ごと');
+  sh.getRange('I3:N3').setValues([['品目（まとめ）'].concat(stat)]);
+  sh.getRange('P2').setValue('品目×受取時間ごと');
+  sh.getRange('P3:V3').setValues([['品目（まとめ）', '受取時間'].concat(stat)]);
+  ['A3:G3', 'I3:N3', 'P3:V3'].forEach(function (a) { sh.getRange(a).setFontWeight('bold').setBackground('#f1f3f4'); });
+  sh.getRange('I2:P2').setFontWeight('bold');
+  // 一覧：日次残数からこの大会の行を抽出し、受取時間は在庫設定から引く
+  sh.getRange('A4').setFormula('=IFERROR(LET(' +
+    'd, FILTER({' + c + 'C2:C, ' + c + 'D2:D, ' + c + 'E2:E, ' + c + 'F2:F, ' + c + 'H2:H}, ' + c + 'A2:A = $E$1), ' +
+    'dt, INDEX(d, , 1), it, INDEX(d, , 2), ' +
+    'rv, MAP(dt, it, LAMBDA(x, y, IFERROR(TO_TEXT(INDEX(FILTER(' + st + 'H2:H, ' + st + 'A2:A = $E$1, ' + st + 'C2:C = x, ' + st + 'E2:E = y), 1)), ""))), ' +
+    'SORT(HSTACK(dt, rv, REGEXREPLACE(it, "(（[^）]*）)+$", ""), it, INDEX(d, , 3), INDEX(d, , 4), INDEX(d, , 5)), 1, TRUE, 2, TRUE, 4, TRUE)), "")');
+  // 品目ごと（期限切れ回数の多い順）
+  sh.getRange('I4').setFormula('=IFERROR(LET(n, UNIQUE(FILTER(C4:C, C4:C <> "")), ' +
+    'SORT(HSTACK(n, ' +
+    'MAP(n, LAMBDA(x, COUNTIF(C4:C, x))), ' +
+    'MAP(n, LAMBDA(x, COUNTIFS(C4:C, x, F4:F, ">0"))), ' +
+    'MAP(n, LAMBDA(x, SUMIF(C4:C, x, F4:F))), ' +
+    'MAP(n, LAMBDA(x, AVERAGEIF(C4:C, x, F4:F))), ' +
+    'MAP(n, LAMBDA(x, IFERROR(SUMIF(C4:C, x, F4:F) / SUMIF(C4:C, x, E4:E), 0)))), 3, FALSE, 4, FALSE)), "")');
+  // 品目×受取時間ごと（品目名・受取時間の順）
+  sh.getRange('P4').setFormula('=IFERROR(LET(k, UNIQUE(FILTER({C4:C, B4:B}, C4:C <> "")), n, INDEX(k, , 1), t, INDEX(k, , 2), ' +
+    'SORT(HSTACK(n, t, ' +
+    'MAP(n, t, LAMBDA(x, y, COUNTIFS(C4:C, x, B4:B, y))), ' +
+    'MAP(n, t, LAMBDA(x, y, COUNTIFS(C4:C, x, B4:B, y, F4:F, ">0"))), ' +
+    'MAP(n, t, LAMBDA(x, y, SUMIFS(F4:F, C4:C, x, B4:B, y))), ' +
+    'MAP(n, t, LAMBDA(x, y, AVERAGEIFS(F4:F, C4:C, x, B4:B, y))), ' +
+    'MAP(n, t, LAMBDA(x, y, IFERROR(SUMIFS(F4:F, C4:C, x, B4:B, y) / SUMIFS(E4:E, C4:C, x, B4:B, y), 0)))), 1, TRUE, 2, TRUE)), "")');
+  ['E4:F', 'J4:L', 'R4:T'].forEach(function (a) { sh.getRange(a).setNumberFormat('0'); });
+  sh.getRange('M4:M').setNumberFormat('0.0');
+  sh.getRange('N4:N').setNumberFormat('0%');
+  sh.getRange('U4:U').setNumberFormat('0.0');
+  sh.getRange('V4:V').setNumberFormat('0%');
+  sh.setFrozenRows(3);
+  if (sh.setColumnWidth) {
+    [[2, 70], [3, 160], [4, 200], [8, 24], [9, 160], [15, 24], [16, 160], [17, 70]].forEach(function (w) { sh.setColumnWidth(w[0], w[1]); });
+  }
+  if (sh.setConditionalFormatRules) {
+    const rule = function (a, f, col) { return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(f).setBackground(col).setRanges([sh.getRange(a)]).build(); };
+    sh.setConditionalFormatRules([
+      rule('F4:F', '=AND(ISNUMBER($E4),ISNUMBER($F4),$E4>0,$F4>=$E4/2)', '#f4cccc'), // 期限切れ数が在庫数の半分以上
+      rule('F4:F', '=AND(ISNUMBER($F4),$F4=0)', '#cfe2f3'),                         // 期限切れ0
+      rule('F4:F', '=ISNUMBER($F4)', '#d9ead3'),                                     // それ以外
+      rule('I4:N', '=AND(ISNUMBER($N4),$N4>0.5)', '#f4cccc'),                        // 期限切れ率50%超
+      rule('P4:V', '=AND(ISNUMBER($V4),$V4>0.5)', '#f4cccc'),
+    ]);
+  }
 }
 
 /** シート名に使えない文字を除き、他のシートと重ならない名前にする */
