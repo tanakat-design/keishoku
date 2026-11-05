@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>軽食メニュー</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Montserrat:wght@500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{--u:1vh;--w:1vw;--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
 *{box-sizing:border-box}
@@ -70,6 +70,35 @@ body.b-spadie{background-color:#113465}
 .b-spadie .tile.sold .ph{background:#1b2c45}
 .b-spadie .ctl button{color:#113465;border-color:#fff}
 .b-spadie .empty{font-family:"DotGothic16",sans-serif;color:#fff}
+/* ---- JOPT（白 / #c86b30）。ロゴは支給画像の切り出しのみ ---- */
+.b-jopt #app{--acc:#c86b30;--text:#2b2b2b;--sub:#7a7a7a;--line:#ece4dc;font-family:"Noto Sans JP",-apple-system,sans-serif;background:#fff}
+.b-jopt header{background:transparent;border-bottom:1px solid var(--line);align-items:center;padding:calc(var(--u)*1.6) calc(var(--w)*3) calc(var(--u)*1.4)}
+.b-jopt header h1{display:flex;align-items:center;gap:calc(var(--w)*2.2)}
+.b-jopt header .logo{display:block;height:calc(var(--u)*15);width:auto}
+.b-jopt header h1 .ttl{display:flex;flex-direction:column;gap:calc(var(--u)*.9)}
+.b-jopt header h1 .t{font-weight:500;letter-spacing:.32em;font-size:calc(var(--u)*4.4);color:var(--text);line-height:1.1}
+.b-jopt header h1 small{margin:0;font-family:"Montserrat",sans-serif;font-weight:600;letter-spacing:.2em;font-size:calc(var(--u)*1.8);color:var(--acc)}
+.b-jopt header .clock{font-family:"Montserrat",sans-serif;font-weight:500;letter-spacing:.06em;font-size:calc(var(--u)*4);color:var(--text)}
+.b-jopt main{padding:calc(var(--u)*2.4) calc(var(--w)*3)}
+.b-jopt .tile{background:#fff;border:1px solid var(--line);border-radius:calc(var(--u)*.5);box-shadow:0 calc(var(--u)*.3) calc(var(--u)*1.4) rgba(90,45,15,.08)}
+.b-jopt .ph{background:#f6f1ec}
+.b-jopt .ph .ini{color:#e3cdbd;font-weight:500}
+.b-jopt .nm{font-weight:500;color:var(--text);letter-spacing:.04em}
+.b-jopt .pr{font-family:"Montserrat",sans-serif;font-weight:600;color:var(--acc);letter-spacing:.04em}
+.b-jopt .st{font-weight:500;border-radius:2px;letter-spacing:.12em}
+.b-jopt .st.on{background:var(--acc);color:#fff}
+.b-jopt .st.soon{background:transparent;color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.b-jopt .band{background:rgba(255,255,255,.92);color:var(--acc);font-family:"Montserrat",sans-serif;font-weight:600;letter-spacing:.32em;font-size:calc(var(--tw)*.1);border-top:1px solid var(--acc);border-bottom:1px solid var(--acc)}
+.b-jopt .tile.sold .ph img{opacity:.45}
+.b-jopt .empty{color:var(--sub);letter-spacing:.12em}
+.b-jopt-o #app{background:#c86b30;--line:rgba(255,255,255,.4)}
+.b-jopt-o header{background:#fff;border-bottom:0;box-shadow:0 calc(var(--u)*.2) calc(var(--u)*1.2) rgba(60,25,5,.15)}
+.b-jopt-o .tile{border:0;box-shadow:0 calc(var(--u)*.4) calc(var(--u)*1.6) rgba(60,25,5,.18)}
+.b-jopt-o .empty{color:#fff}
+.o-v.b-jopt header .logo{height:calc(var(--u)*9)}
+.o-v.b-jopt header h1 .t{font-size:calc(var(--u)*3)}
+.o-v.b-jopt header h1 small{font-size:calc(var(--u)*1.4)}
+.o-v.b-jopt header .clock{font-size:calc(var(--u)*2.8)}
 /* ---- 縦置き ---- */
 .o-v header{flex-wrap:nowrap;gap:calc(var(--w)*2)}
 .o-v header h1{min-width:0}
@@ -93,17 +122,28 @@ const q = new URLSearchParams(location.search);
 const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase(), orient: ['v', 'v2'].includes(q.get('orient')) ? q.get('orient') : 'h' };
 // ブランド別デザイン：URLの brand（jopt / spadie）を優先し、なければ大会名に SPADIE を含むかで決める
 // SPADIE：assets/LINE_ALBUM_SPADIE ロゴ_260908_2.png（支給されたロゴ画像そのもの）から、表示時にロゴ部分と背景柄の1区画を切り出して使う。画像は加工しない
-const BRAND = { spadie: { src: 'assets/' + encodeURIComponent('LINE_ALBUM_SPADIE ロゴ_260908_2.png'), crop: { x: 40, y: 285, w: 1120, h: 620 }, tile: { x: 0, y: 0, w: 546, h: 274 } } };
+const JOPT_LOGO = { src: 'assets/' + encodeURIComponent('JOPTロゴ-02.png'), crop: { x: 187, y: 187, w: 687, h: 893 } }; // JOPTロゴ（支給画像）。加工せず切り出すだけ
+const BRAND = {
+  spadie: { src: 'assets/' + encodeURIComponent('LINE_ALBUM_SPADIE ロゴ_260908_2.png'), crop: { x: 40, y: 285, w: 1120, h: 620 }, tile: { x: 0, y: 0, w: 546, h: 274 } },
+  'jopt-w': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：白背景
+  'jopt-o': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：#c86b30 背景
+};
 function cut(img, r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return c.toDataURL('image/png'); }
 function prepBrand(B) {
   if (!B.src || B.ready || B.loading) return;
   B.loading = true;
   const img = new Image();
-  img.onload = () => { B.logo = cut(img, B.crop); B.bg = cut(img, B.tile); B.ready = true; if (S.data) render(); };
+  img.onload = () => { B.logo = cut(img, B.crop); if (B.tile) B.bg = cut(img, B.tile); B.ready = true; if (S.data) render(); };
   img.onerror = () => { B.loading = false; };
   img.src = B.src;
 }
-function brandOf(name) { return BRAND[P.brand] || P.brand === 'jopt' ? P.brand : (/spadie/i.test(name || '') ? 'spadie' : 'jopt'); }
+// ブランド：URLの brand（std / spadie / jopt-w / jopt-o）を優先。なければ大会名で判定（SPADIE → spadie、JOPT かつ Osaka → jopt-w、その他 → 標準）
+function brandOf(name) {
+  if (BRAND[P.brand] || P.brand === 'std') return P.brand;
+  if (/spadie/i.test(name || '')) return 'spadie';
+  if (/jopt/i.test(name || '') && /osaka/i.test(name || '')) return 'jopt-w';
+  return 'std';
+}
 const S = { data: null, imgs: {}, imgV: {}, tick: null };
 const app = document.getElementById('app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -186,7 +226,7 @@ function render() {
   const list = tiles();
   const hm = nowStr().slice(11);
   const b = brandOf(d.name), B = BRAND[b] || {};
-  document.body.className = 'b-' + b;
+  document.body.className = 'b-' + b + (B.cls ? ' ' + B.cls : '');
   orient();
   prepBrand(B);
   app.style.backgroundImage = B.bg ? `url(${B.bg})` : '';
