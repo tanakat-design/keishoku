@@ -59,6 +59,18 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .irow button{padding:8px 12px;flex:0 0 auto}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .btns button{flex:1}
+.popurl{display:flex;gap:6px;margin-top:4px}
+.popurl input{flex:1;min-width:0;font-size:13px;padding:8px}
+.popurl .btn-sub,.popctl .btn-sub{padding:8px 12px;font-size:14px;text-decoration:none;display:inline-flex;align-items:center;border-radius:8px;border:0;cursor:pointer;white-space:nowrap}
+.poprow{display:flex;gap:12px;padding:12px 0;border-top:1px solid #eee}
+.poprow:first-of-type{border-top:0}
+.popimg{width:96px;height:72px;flex:none;border-radius:8px;overflow:hidden;background:#f1f3f4;display:flex;align-items:center;justify-content:center;font-size:12px;color:#888}
+.popimg img{width:100%;height:100%;object-fit:cover}
+.popbody{flex:1;min-width:0}
+.popctl{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.popctl input{width:110px;padding:8px;font-size:15px}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .empty{color:var(--sub);text-align:center;padding:24px 0}
 textarea{margin-top:10px;font-size:14px;resize:vertical}
 .grp{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;background:#fafbfc}
@@ -227,7 +239,7 @@ async function loadDay(quiet) {
 function render() {
   if (S.view === 'loading') { hideBar(); app.innerHTML = '<div class="empty">読み込み中…</div>'; return; }
   if (S.view === 'error') { hideBar(); app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card"><div class="notice warn">${esc(S.error)}</div><button class="btn" onclick="init()">再読み込み</button></div>`; return; }
-  ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit })[S.view]();
+  ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit, adminPop: renderAdminPop })[S.view]();
 }
 function hideBar() { bar.classList.add('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = ''; }
 function showBar(html) { barIn.innerHTML = html; bar.classList.remove('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = (bar.offsetHeight + 24) + 'px'; }
@@ -501,7 +513,7 @@ function renderAdminList() {
       <label class="sw"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="setActive(${i}, this.checked)"><span>${t.active ? '表示' : '非表示'}</span></label></div>
       <div class="small">スタッフPIN ${esc(t.staffPin)}</div>
       <div class="small" style="margin-top:6px">${t.days.map(d => md(d.date) + ' ' + d.items.length + '品目').join('　') || '開催日なし'}</div>
-      <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button></div></div>`).join('')
+      <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button><button class="btn-sub" onclick="popT(${i})">POP設定</button></div></div>`).join('')
       : '<div class="card empty">大会が登録されていません</div>') + '</div>';
 }
 async function setActive(i, on) {
@@ -509,6 +521,72 @@ async function setActive(i, on) {
   try { S.admin.list = await call('adminSetActive', S.admin.pin, t.id, on); toast(t.name + 'を' + (on ? '表示' : '非表示') + 'にしました'); }
   catch (e) { toast(netMsg(e)); }
   render();
+}
+/* ===== デジタルPOP設定（写真・価格） ===== */
+const POP_BASE = 'https://tanakat-design.github.io/keishoku/pop.html';
+async function popT(i) {
+  const t = S.admin.list[i];
+  S.pop = { id: t.id, name: t.name, list: null, busy: '' }; S.view = 'adminPop'; render();
+  try { S.pop.list = await call('adminPopList', S.admin.pin, t.id); } catch (e) { toast(netMsg(e)); S.pop.list = []; }
+  render();
+}
+function popUrl(mode) { return POP_BASE + '?t=' + encodeURIComponent(S.pop.id) + '&mode=' + mode; }
+function renderAdminPop() {
+  hideBar();
+  const p = S.pop;
+  const urlRow = (label, mode) => `<div class="small" style="margin-top:8px">${label}</div>
+    <div class="popurl"><input readonly value="${esc(popUrl(mode))}" onfocus="this.select()"><button class="btn-sub" onclick="copyText('${esc(popUrl(mode))}')">コピー</button><a class="btn-sub" href="${esc(popUrl(mode))}" target="_blank" rel="noopener">開く</a></div>`;
+  app.innerHTML = `<div class="header"><h1>POP設定</h1><button class="link" onclick="S.view='adminList';render()">戻る</button></div>
+    <div class="card"><div style="font-weight:700">${esc(p.name)}</div>
+    <div class="small" style="margin-top:4px">会場のモニターでPOPのURLを開くと、在庫のある軽食は写真付き、在庫切れはモノクロで「SOLD OUT」と表示します。30秒ごとに自動更新します。表示の切り替えは画面右下（マウスを乗せると表示）からもできます。</div>
+    ${urlRow('販売中の品目のみ（受取済み・賞味期限内）', 'now')}${urlRow('当日の全品目（受取前は「○:○○から販売」）', 'all')}</div>
+    <div class="card"><div style="font-weight:700">写真と価格</div>
+    <div class="small" style="margin-top:4px">品目名ごとに登録します。同じ品目名なら、他の大会でもそのまま使われます。写真は自動で縮小して保存します。</div>
+    ${p.list == null ? '<div class="empty">読み込み中…</div>' : p.list.length ? p.list.map((it, k) => `<div class="poprow">
+      <div class="popimg">${it.img ? `<img src="${it.img}" alt="">` : '<span>写真なし</span>'}</div>
+      <div class="popbody"><div style="font-weight:700">${esc(it.name)}</div>
+        <div class="popctl"><span>¥</span><input id="pp${k}" inputmode="numeric" value="${esc(it.price)}" placeholder="価格"><button class="btn-sub" ${p.busy ? 'disabled' : ''} onclick="popSavePrice(${k})">保存</button></div>
+        <div class="popctl"><label class="btn-sub filebtn">${it.img ? '写真を変更' : '写真を選ぶ'}<input type="file" accept="image/*" onchange="popPhoto(${k}, this)"></label>${it.img ? `<button class="btn-sub" ${p.busy ? 'disabled' : ''} onclick="popDelPhoto(${k})">写真を削除</button>` : ''}</div>
+        ${p.busy === it.name ? '<div class="small">保存中…</div>' : ''}</div></div>`).join('') : '<div class="empty">この大会には品目がありません</div>'}</div>`;
+}
+function copyText(t) {
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('コピーしました'), () => toast('長押しでコピーしてください'));
+}
+async function popSave(k, img) {
+  const it = S.pop.list[k];
+  const el = document.getElementById('pp' + k), price = el ? el.value : it.price;
+  S.pop.list.forEach((x, i) => { const e = document.getElementById('pp' + i); if (e && i !== k) x.price = e.value; }); // 他の行の入力途中の価格を残す
+  S.pop.busy = it.name; render();
+  try { const r = await call('adminPopSave', S.admin.pin, it.name, price, img); S.pop.list[k] = { name: r.name, price: r.price, img: r.img }; toast('保存しました'); }
+  catch (e) { toast(netMsg(e)); }
+  S.pop.busy = ''; render();
+}
+function popSavePrice(k) { popSave(k, null); }
+function popDelPhoto(k) { if (confirm('写真を削除しますか？')) popSave(k, ''); }
+async function popPhoto(k, input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  try { popSave(k, await shrinkImage(f)); } catch (e) { toast(e.message || '写真を読み込めませんでした'); }
+}
+/** 写真を4:3に切り抜いて縮小し、data URL（JPEG）にする。スプレッドシートの1セルに収まる大きさまで画質を下げる */
+function shrinkImage(file) {
+  return new Promise((ok, ng) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const sw = img.naturalWidth, sh = img.naturalHeight, r = 4 / 3;
+      let cw = sw, ch = sw / r; if (ch > sh) { ch = sh; cw = sh * r; }
+      const sx = (sw - cw) / 2, sy = (sh - ch) / 2;
+      for (const w of [480, 400, 320]) {
+        const c = document.createElement('canvas'); c.width = w; c.height = Math.round(w / r);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(img, sx, sy, cw, ch, 0, 0, c.width, c.height);
+        for (const q of [0.8, 0.7, 0.6, 0.5]) { const d = c.toDataURL('image/jpeg', q); if (d.length < 48000) return ok(d); }
+      }
+      ng(new Error('写真を十分に小さくできませんでした'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ng(new Error('写真を読み込めませんでした')); };
+    img.src = url;
+  });
 }
 /* 管理画面は「受取（店舗×受取時間×賞味期限）」単位で品目をまとめて編集する */
 function newGroup() { return { store: '', recv: '', exp: '', method: '', addr: '', tel: '', items: [{ name: '', stock: '' }] }; }
