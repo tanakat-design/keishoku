@@ -8,15 +8,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
+:root{--u:1vh;--w:1vw;--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;overflow:hidden}
-#app{height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:baseline;justify-content:space-between;padding:1.6vh 2.4vw 1.2vh;border-bottom:1px solid var(--line);background:#fff}
-header h1{margin:0;font-size:4.2vh;letter-spacing:.04em}
-header h1 small{font-size:2.2vh;color:var(--sub);font-weight:500;margin-left:1.2vw;letter-spacing:0}
-header .clock{font-size:3vh;color:var(--sub);font-variant-numeric:tabular-nums}
-main{flex:1;min-height:0;position:relative;padding:1.6vh 2vw;overflow:hidden}
+#app{width:calc(var(--w)*100);height:calc(var(--u)*100);display:flex;flex-direction:column;position:fixed;left:0;top:0;transform-origin:0 0;overflow:hidden}
+#app.rot-r{transform:translateX(100vw) rotate(90deg)}
+#app.rot-l{transform:translateY(100vh) rotate(-90deg)}
+header{display:flex;align-items:baseline;justify-content:space-between;padding:calc(var(--u)*1.6) calc(var(--w)*2.4) calc(var(--u)*1.2);border-bottom:1px solid var(--line);background:#fff}
+header h1{margin:0;font-size:calc(var(--u)*4.2);letter-spacing:.04em}
+header h1 small{font-size:calc(var(--u)*2.2);color:var(--sub);font-weight:500;margin-left:calc(var(--w)*1.2);letter-spacing:0}
+header .clock{font-size:calc(var(--u)*3);color:var(--sub);font-variant-numeric:tabular-nums}
+main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(--w)*2);overflow:hidden}
 .grid{display:grid;gap:var(--gap);height:100%;align-content:center;justify-content:center;grid-template-columns:repeat(var(--cols),var(--tw))}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--tw)*.05);overflow:hidden;display:flex;flex-direction:column;height:var(--th);position:relative}
 .ph{position:relative;flex:1;min-height:0;background:#eef0f2;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -33,41 +35,52 @@ main{flex:1;min-height:0;position:relative;padding:1.6vh 2vw;overflow:hidden}
 .tile.sold .ph{background:#f1f1f1}
 .band{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);background:rgba(32,33,36,.85);color:#fff;text-align:center;font-weight:800;letter-spacing:.12em;font-size:calc(var(--tw)*.12);padding:.18em 0;z-index:2}
 .tile.soon .ph{opacity:.75}
-.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:4vh;color:var(--sub);text-align:center;line-height:1.6}
-.ctl{position:fixed;right:1.2vw;bottom:1.2vh;display:flex;gap:8px;opacity:0;transition:opacity .3s}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*4);color:var(--sub);text-align:center;line-height:1.6}
+.ctl{position:fixed;right:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);display:flex;gap:8px;opacity:0;transition:opacity .3s}
 body:hover .ctl,.ctl:focus-within{opacity:1}
 .ctl button,.ctl select{font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);cursor:pointer}
-.offline{position:fixed;left:1.2vw;bottom:1.2vh;font-size:13px;color:#b3261e;background:#fdecea;border-radius:6px;padding:4px 10px;display:none}
-.pick{max-width:560px;margin:10vh auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
+.offline{position:fixed;left:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);font-size:13px;color:#b3261e;background:#fdecea;border-radius:6px;padding:4px 10px;display:none}
+.pick{max-width:560px;margin:calc(var(--u)*10) auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
 .pick h2{margin:0 0 16px;font-size:22px}
 .pick button{display:block;width:100%;text-align:left;font-size:18px;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
 .pick button:hover{border-color:var(--accent)}
 header .logo{display:none}
 /* ---- SPADIE（ロゴ画像と背景柄は assets/ の元画像の切り出し。加工しない） ---- */
-body.b-spadie{--navy:#113465;--card:#0b2650;--yel:#f6c10a;--blu:#2d99d6;--pink:#e4007f;--text:#fff;--sub:#c9d6ea;--line:#2d99d6;
+body.b-spadie{background-color:#113465}
+.b-spadie #app{--navy:#113465;--card:#0b2650;--yel:#f6c10a;--blu:#2d99d6;--pink:#e4007f;--text:#fff;--sub:#c9d6ea;--line:#2d99d6;
   background-color:#113465;background-repeat:repeat}
-.b-spadie #app{background:transparent}
-.b-spadie header{background:transparent;border-bottom:0;align-items:center;padding:1.2vh 2.4vw .4vh}
-.b-spadie header h1{display:flex;align-items:center;gap:2vw;color:#fff}
-.b-spadie header .logo{display:block;height:19vh;width:auto}
-.b-spadie header h1 .ttl{display:flex;flex-direction:column;gap:.6vh}
-.b-spadie header h1 .t{font-family:"DotGothic16",sans-serif;font-weight:400;color:var(--yel);font-size:6vh;letter-spacing:.08em;line-height:1.1}
-.b-spadie header h1 small{color:#fff;margin:0;font-family:"DotGothic16",sans-serif;font-size:2.6vh}
-.b-spadie header .clock{color:#fff;font-family:"DotGothic16",sans-serif;font-size:5vh}
-.b-spadie main{padding-top:.6vh}
-.b-spadie .tile{background:var(--card);border:.3vh solid var(--blu);border-radius:.8vh}
+.b-spadie header{background:transparent;border-bottom:0;align-items:center;padding:calc(var(--u)*1.2) calc(var(--w)*2.4) .calc(var(--u)*4)}
+.b-spadie header h1{display:flex;align-items:center;gap:calc(var(--w)*2);color:#fff}
+.b-spadie header .logo{display:block;height:calc(var(--u)*19);width:auto}
+.b-spadie header h1 .ttl{display:flex;flex-direction:column;gap:.calc(var(--u)*6)}
+.b-spadie header h1 .t{font-family:"DotGothic16",sans-serif;font-weight:400;color:var(--yel);font-size:calc(var(--u)*6);letter-spacing:.08em;line-height:1.1}
+.b-spadie header h1 small{color:#fff;margin:0;font-family:"DotGothic16",sans-serif;font-size:calc(var(--u)*2.6)}
+.b-spadie header .clock{color:#fff;font-family:"DotGothic16",sans-serif;font-size:calc(var(--u)*5)}
+.b-spadie main{padding-top:.calc(var(--u)*6)}
+.b-spadie .tile{background:var(--card);border:.calc(var(--u)*3) solid var(--blu);border-radius:.calc(var(--u)*8)}
 .b-spadie .ph{background:#1b3d70}
 .b-spadie .ph .ini{color:#5f7fae;font-family:"DotGothic16",sans-serif}
 .b-spadie .nm{color:#fff}
 .b-spadie .pr{font-family:"DotGothic16",sans-serif;font-weight:400;color:var(--yel);font-size:calc(var(--tw)*.095)}
-.b-spadie .st{font-family:"DotGothic16",sans-serif;font-weight:400;border-radius:.4vh}
+.b-spadie .st{font-family:"DotGothic16",sans-serif;font-weight:400;border-radius:.calc(var(--u)*4)}
 .b-spadie .st.on{background:var(--yel);color:var(--navy)}
 .b-spadie .st.soon{background:var(--blu);color:#fff}
-.b-spadie .band{background:var(--navy);color:var(--yel);font-family:"DotGothic16",sans-serif;font-weight:400;letter-spacing:.16em;border-top:.4vh solid var(--pink);border-bottom:.4vh solid var(--pink)}
+.b-spadie .band{background:var(--navy);color:var(--yel);font-family:"DotGothic16",sans-serif;font-weight:400;letter-spacing:.16em;border-top:.calc(var(--u)*4) solid var(--pink);border-bottom:.calc(var(--u)*4) solid var(--pink)}
 .b-spadie .tile.sold{border-color:#4a5f82}
 .b-spadie .tile.sold .ph{background:#1b2c45}
 .b-spadie .ctl button{color:#113465;border-color:#fff}
 .b-spadie .empty{font-family:"DotGothic16",sans-serif;color:#fff}
+/* ---- 縦置き ---- */
+.o-v header{flex-wrap:nowrap;gap:calc(var(--w)*2)}
+.o-v header h1{min-width:0}
+.o-v.b-spadie header .logo{height:calc(var(--u)*10)}
+.o-v.b-spadie header h1 .t{font-size:calc(var(--u)*3.3)}
+.o-v.b-spadie header h1 small{font-size:calc(var(--u)*1.8)}
+.o-v.b-spadie header .clock{font-size:calc(var(--u)*3.4)}
+.o-v header h1{font-size:calc(var(--u)*3.4)}
+.o-v header h1 small{font-size:calc(var(--u)*1.7)}
+.o-v header .clock{font-size:calc(var(--u)*2.4)}
+.o-v .empty{font-size:calc(var(--u)*3)}
 </style>
 </head>
 <body>
@@ -77,7 +90,7 @@ body.b-spadie{--navy:#113465;--card:#0b2650;--yel:#f6c10a;--blu:#2d99d6;--pink:#
 const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
 const POLL = 30000;
 const q = new URLSearchParams(location.search);
-const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase() };
+const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase(), orient: ['v', 'v2'].includes(q.get('orient')) ? q.get('orient') : 'h' };
 // ブランド別デザイン：URLの brand（jopt / spadie）を優先し、なければ大会名に SPADIE を含むかで決める
 // SPADIE：assets/LINE_ALBUM_SPADIE ロゴ_260908_2.png（支給されたロゴ画像そのもの）から、表示時にロゴ部分と背景柄の1区画を切り出して使う。画像は加工しない
 const BRAND = { spadie: { src: 'assets/' + encodeURIComponent('LINE_ALBUM_SPADIE ロゴ_260908_2.png'), crop: { x: 40, y: 285, w: 1120, h: 620 }, tile: { x: 0, y: 0, w: 546, h: 274 } } };
@@ -104,6 +117,7 @@ async function call(fn, ...args) {
 function setParam() {
   const u = new URL(location.href);
   u.searchParams.set('t', P.tid); u.searchParams.set('mode', P.mode);
+  if (P.orient === 'h') u.searchParams.delete('orient'); else u.searchParams.set('orient', P.orient);
   history.replaceState(null, '', u);
 }
 
@@ -158,14 +172,24 @@ function layout(n) {
   g.style.setProperty('--cols', best.c); g.style.setProperty('--tw', best.tw + 'px');
   g.style.setProperty('--th', best.tw * ratio + 'px'); g.style.setProperty('--gap', best.gap + 'px');
 }
+// 向き：h＝横、v＝縦、v2＝縦（上下逆）。縦で画面が横長のとき（縦置きのテレビが回転表示できない場合）は90°回転して表示する
+function orient() {
+  const a = app.style, W = innerWidth, H = innerHeight, rot = P.orient !== 'h' && W > H;
+  app.className = rot ? (P.orient === 'v' ? 'rot-r' : 'rot-l') : (P.orient === 'v2' ? 'rot-f' : '');
+  const w = rot ? H : W, h = rot ? W : H;
+  a.setProperty('--u', h / 100 + 'px'); a.setProperty('--w', w / 100 + 'px');
+  a.transform = !rot && P.orient === 'v2' ? 'rotate(180deg)' : ''; a.transformOrigin = !rot && P.orient === 'v2' ? '50% 50%' : '';
+  document.body.classList.toggle('o-v', P.orient !== 'h');
+}
 function render() {
   const d = S.data;
   const list = tiles();
   const hm = nowStr().slice(11);
   const b = brandOf(d.name), B = BRAND[b] || {};
   document.body.className = 'b-' + b;
+  orient();
   prepBrand(B);
-  document.body.style.backgroundImage = B.bg ? `url(${B.bg})` : '';
+  app.style.backgroundImage = B.bg ? `url(${B.bg})` : '';
   app.innerHTML = `<header><h1>${B.logo ? `<img class="logo" src="${B.logo}" alt="">` : ''}<span class="ttl"><span class="t">軽食メニュー</span><small>${esc(d.name)}</small></span></h1><div class="clock">${hm}</div></header>
     <main>${list.length ? `<div class="grid">${list.map(t => {
       const img = S.imgs[t.base];
@@ -175,20 +199,25 @@ function render() {
         <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
         <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
     }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
-    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="fs()">全画面</button><button onclick="P.tid='';pick()">大会を変更</button></div>`;
+    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button><button onclick="P.tid='';pick()">大会を変更</button></div>`;
   layout(list.length);
   alignBg(B);
 }
 // 背景柄をロゴ画像内の柄と継ぎ目なくつなげる（ロゴは元画像の (crop.x, crop.y) から切り出しているため、その位置に柄の原点を合わせる）
 function alignBg(B) {
-  const st = document.body.style;
+  const st = app.style;
   const img = document.querySelector('header .logo');
   if (!B.tile || !img) { st.backgroundSize = st.backgroundPosition = ''; return; }
-  const set = () => { const r = img.getBoundingClientRect(), k = r.height / B.crop.h; if (!k) return;
+  const set = () => {
+    let x = 0, y = 0, e = img; // #app 内での位置（回転の影響を受けないレイアウト上の座標）
+    while (e && e !== app) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent; }
+    const k = img.offsetHeight / B.crop.h; if (!k) return;
     st.backgroundSize = (B.tile.w * k) + 'px ' + (B.tile.h * k) + 'px';
-    st.backgroundPosition = (r.left - B.crop.x * k) + 'px ' + (r.top - B.crop.y * k) + 'px'; };
+    st.backgroundPosition = (x - B.crop.x * k) + 'px ' + (y - B.crop.y * k) + 'px';
+  };
   img.complete ? set() : img.addEventListener('load', set, { once: true });
 }
+function toggleOrient() { P.orient = ({ h: 'v', v: 'v2', v2: 'h' })[P.orient]; setParam(); render(); }
 function toggleMode() { P.mode = P.mode === 'now' ? 'all' : 'now'; setParam(); render(); }
 function fs() { const e = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : e.requestFullscreen && e.requestFullscreen()); }
 
