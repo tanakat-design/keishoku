@@ -35,6 +35,10 @@ main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(-
 .tile.sold .ph{background:#f1f1f1}
 .band{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);background:rgba(32,33,36,.85);color:#fff;text-align:center;font-weight:800;letter-spacing:.12em;font-size:calc(var(--tw)*.12);padding:.18em 0;z-index:2}
 .tile.soon .ph{opacity:.75}
+.scroller{display:flex;flex-direction:column;will-change:transform}
+.scroller .grid{height:auto;align-content:start}
+@keyframes popscroll{from{transform:translateY(0)}to{transform:translateY(var(--dist))}}
+main.scrolling{-webkit-mask-image:linear-gradient(transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(transparent,#000 4%,#000 96%,transparent)}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*4);color:var(--sub);text-align:center;line-height:1.6}
 .ctl{position:fixed;right:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);display:flex;gap:8px;opacity:0;transition:opacity .3s}
 body:hover .ctl,.ctl:focus-within{opacity:1}
@@ -202,20 +206,36 @@ function tiles() {
   });
   return out;
 }
+// タイルの大きさを画面に合わせる。小さくなりすぎる（約2.4段以上並ぶ）場合は、大きさを保ったまま下へ自動で流し続ける（無限スクロール）
 function layout(n) {
   const m = document.querySelector('main'); if (!m || !n) return;
   const cs = getComputedStyle(m);
   const W = m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
   const H = m.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 2, ratio = 1.05; // 高さ = 幅 × ratio
+  const gap = Math.max(8, Math.min(W, H) * 0.018);
   let best = { tw: 0 };
   for (let c = 1; c <= n; c++) {
-    const r = Math.ceil(n / c), gap = Math.max(8, Math.min(W, H) * 0.018);
+    const r = Math.ceil(n / c);
     const tw = Math.min((W - gap * (c - 1)) / c, (H - gap * (r - 1)) / r / ratio);
-    if (tw > best.tw) best = { tw, c, gap };
+    if (tw > best.tw) best = { tw, c };
   }
   const g = document.querySelector('.grid');
-  g.style.setProperty('--cols', best.c); g.style.setProperty('--tw', best.tw + 'px');
-  g.style.setProperty('--th', best.tw * ratio + 'px'); g.style.setProperty('--gap', best.gap + 'px');
+  const set = (c, tw) => { g.style.setProperty('--cols', c); g.style.setProperty('--tw', tw + 'px'); g.style.setProperty('--th', tw * ratio + 'px'); g.style.setProperty('--gap', gap + 'px'); };
+  const minTw = (Math.min(W, H) - gap * 1.4) / 2.4 / ratio; // これより小さくはしない（短い辺に約2.4枚分）
+  m.classList.remove('scrolling');
+  if (best.tw >= minTw) { set(best.c, best.tw); S.scroll0 = 0; return; }
+  const c = Math.max(1, Math.floor((W + gap) / (minTw + gap)));
+  const tw = Math.min((W - gap * (c - 1)) / c, (H * 0.6) / ratio);
+  set(c, tw);
+  const r = Math.ceil(n / c), dist = r * tw * ratio + r * gap; // 1周分の移動距離（グリッド1つ分＋間隔）
+  const wrap = document.createElement('div'); wrap.className = 'scroller'; wrap.style.gap = gap + 'px';
+  g.replaceWith(wrap); wrap.append(g, g.cloneNode(true)); // 同じ並びを2つ縦に並べ、1つ分動いたら最初に戻す
+  const dur = dist / (H / 14); // 画面の高さを約14秒で流れる速さ
+  if (!S.scroll0) S.scroll0 = Date.now();
+  wrap.style.setProperty('--dist', -dist + 'px');
+  wrap.style.animation = `popscroll ${dur}s linear infinite`;
+  wrap.style.animationDelay = -(((Date.now() - S.scroll0) / 1000) % dur) + 's'; // 再描画しても位置が飛ばないように
+  m.classList.add('scrolling');
 }
 // 向き：h＝横、v＝縦、v2＝縦（上下逆）。縦で画面が横長のとき（縦置きのテレビが回転表示できない場合）は90°回転して表示する
 function orient() {
