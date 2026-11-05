@@ -10,16 +10,17 @@
 
 const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
 const TZ = 'Asia/Tokyo';
-const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数' };
+const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定' };
 const HEAD = {
   [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時'],
   [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話'],
   [SH.LOG]: ['記録日時', '大会ID', '大会名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['大会ID', '大会名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
+  [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。大会をまたいで使い回す
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
-const TEXT_COLS = { [SH.TOURN]: [1, 3], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8] };
-const TIME_COLS = { [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10] };
+const TEXT_COLS = { [SH.TOURN]: [1, 3], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3] };
+const TIME_COLS = { [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10], [SH.POP]: [4] };
 
 /* ---------- Web アプリ ---------- */
 
@@ -34,6 +35,7 @@ const API = {
   getTournaments: getTournaments, staffLogin: staffLogin, getDayState: getDayState,
   markSoldOut: markSoldOut, cancelSoldOut: cancelSoldOut, submitClose: submitClose,
   adminList: adminList, adminSave: adminSave, adminSetActive: adminSetActive,
+  getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
 };
 function doPost(e) {
   let out;
@@ -272,6 +274,85 @@ function adminSetActive(pin, id, active) {
     }
     throw new Error('大会が見つかりません');
   });
+}
+
+/* ---------- デジタルPOP（お客様向けの在庫表示） ---------- */
+
+/**
+ * POP画面用。PIN不要（品目名・価格・在庫の有無だけを返す）。表示中の大会のみ。
+ * 営業日は5時切り替え（0〜4時台は前日の開催日として扱う）。date を渡すとその日を返す（確認用）。
+ */
+function getPopState(tid, date) {
+  const list = tournaments_().filter(function (t) { return t.active; });
+  if (!tid) return { tournaments: list.map(function (t) { return { id: t.id, name: t.name }; }) };
+  const t = list.filter(function (x) { return x.id === tid; })[0];
+  if (!t) throw new Error('大会が見つかりません（非表示の大会は表示できません）');
+  const now = new Date();
+  const d = date || Utilities.formatDate(new Date(now.getTime() - 5 * 3600000), TZ, 'yyyy-MM-dd');
+  const st = state_(t, d);
+  const master = popMaster_(false);
+  const items = st.items.map(function (it) {
+    return { base: popBase_(it.name), store: it.store, recv: it.recv, exp: it.exp, sold: !!it.soldOut };
+  });
+  const info = {};
+  items.forEach(function (it) { if (master[it.base] && !info[it.base]) info[it.base] = { price: master[it.base].price, v: master[it.base].v, img: master[it.base].has }; });
+  return { name: t.name, date: d, now: Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm'), items: items, info: info };
+}
+
+/** POP画面用：品目名の写真（data URL）を返す */
+function getPopImages(names) {
+  const m = popMaster_(true), out = {};
+  (names || []).slice(0, 100).forEach(function (n) { n = str_(n); if (m[n] && m[n].img) out[n] = m[n].img; });
+  return out;
+}
+
+/** 管理画面用：大会に含まれる品目名ごとの価格・写真 */
+function adminPopList(pin, tid) {
+  admin_(pin);
+  const names = [];
+  rows_(SH.STOCK).forEach(function (r) {
+    if (str_(r[0]) !== tid) return;
+    const b = popBase_(r[4]);
+    if (b && names.indexOf(b) < 0) names.push(b);
+  });
+  const m = popMaster_(true);
+  return names.map(function (n) { return { name: n, price: m[n] ? m[n].price : '', img: m[n] ? m[n].img : '' }; });
+}
+
+/** 管理画面用：価格・写真を保存。img は undefined/null で変更なし、'' で削除、data URL で登録 */
+function adminPopSave(pin, name, price, img) {
+  admin_(pin);
+  name = popBase_(name);
+  if (!name) throw new Error('品目名がありません');
+  price = str_(price).replace(/[^\d]/g, '');
+  if (img != null && img !== '' && !/^data:image\/(jpeg|png|webp);base64,/.test(img)) throw new Error('写真の形式が正しくありません');
+  if (img && img.length > 49000) throw new Error('写真のサイズが大きすぎます');
+  return withLock_(function () {
+    const sh = sheet_(SH.POP);
+    const v = rows_(SH.POP);
+    let i = v.findIndex(function (r) { return str_(r[0]) === name; });
+    const cur = i >= 0 ? v[i] : [name, '', '', ''];
+    const row = [name, price === '' ? '' : Number(price), img == null ? str_(cur[2]) : img, new Date()];
+    if (i < 0) { ensureRows_(sh, v.length + 2); i = v.length; }
+    sh.getRange(i + 2, 1, 1, 4).setValues([row]);
+    return { name: name, price: row[1], img: row[2] };
+  });
+}
+
+/** 品目名から受取時間・店舗などの末尾の（ ）を外す */
+function popBase_(name) { return str_(name).replace(/(（[^）]*）)+$/, '').trim(); }
+
+function popMaster_(withImg) {
+  const m = {};
+  let rows = [];
+  try { rows = rows_(SH.POP); } catch (e) { return m; } // 初期設定前はPOP設定なしとして扱う
+  rows.forEach(function (r) {
+    const n = str_(r[0]);
+    if (!n) return;
+    m[n] = { price: r[1] === '' || r[1] == null ? '' : Number(r[1]), v: r[3] instanceof Date ? r[3].getTime() : 0, img: withImg ? str_(r[2]) : '' };
+    if (!withImg) m[n].has = !!str_(r[2]);
+  });
+  return m;
 }
 
 /* ---------- 大会ごとの集計シート ---------- */
