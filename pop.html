@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>軽食メニュー</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;overflow:hidden}
+#app{height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:baseline;justify-content:space-between;padding:1.6vh 2.4vw 1.2vh;border-bottom:1px solid var(--line);background:#fff}
+header h1{margin:0;font-size:4.2vh;letter-spacing:.04em}
+header h1 small{font-size:2.2vh;color:var(--sub);font-weight:500;margin-left:1.2vw;letter-spacing:0}
+header .clock{font-size:3vh;color:var(--sub);font-variant-numeric:tabular-nums}
+main{flex:1;min-height:0;position:relative;padding:1.6vh 2vw;overflow:hidden}
+.grid{display:grid;gap:var(--gap);height:100%;align-content:center;justify-content:center;grid-template-columns:repeat(var(--cols),var(--tw))}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--tw)*.05);overflow:hidden;display:flex;flex-direction:column;height:var(--th);position:relative}
+.ph{position:relative;flex:1;min-height:0;background:#eef0f2;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph .ini{font-size:calc(var(--tw)*.22);font-weight:700;color:#c3c8cf}
+.cap{padding:calc(var(--tw)*.035) calc(var(--tw)*.05) calc(var(--tw)*.04)}
+.nm{font-weight:700;font-size:calc(var(--tw)*.085);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.row{display:flex;justify-content:space-between;align-items:center;margin-top:calc(var(--tw)*.02);gap:6px}
+.pr{font-size:calc(var(--tw)*.08);font-weight:700;font-variant-numeric:tabular-nums}
+.st{font-size:calc(var(--tw)*.055);font-weight:700;border-radius:999px;padding:.15em .7em;white-space:nowrap}
+.st.on{background:#e6f4ea;color:var(--ok)}
+.st.soon{background:#fef3e2;color:var(--soon)}
+.tile.sold .ph img,.tile.sold .ph .ini,.tile.sold .cap{filter:grayscale(1);opacity:.5}
+.tile.sold .ph{background:#f1f1f1}
+.band{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);background:rgba(32,33,36,.85);color:#fff;text-align:center;font-weight:800;letter-spacing:.12em;font-size:calc(var(--tw)*.12);padding:.18em 0;z-index:2}
+.tile.soon .ph{opacity:.75}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:4vh;color:var(--sub);text-align:center;line-height:1.6}
+.ctl{position:fixed;right:1.2vw;bottom:1.2vh;display:flex;gap:8px;opacity:0;transition:opacity .3s}
+body:hover .ctl,.ctl:focus-within{opacity:1}
+.ctl button,.ctl select{font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);cursor:pointer}
+.offline{position:fixed;left:1.2vw;bottom:1.2vh;font-size:13px;color:#b3261e;background:#fdecea;border-radius:6px;padding:4px 10px;display:none}
+.pick{max-width:560px;margin:10vh auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
+.pick h2{margin:0 0 16px;font-size:22px}
+.pick button{display:block;width:100%;text-align:left;font-size:18px;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+.pick button:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="offline" id="off">通信できません（前回の表示のまま）</div>
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
+const POLL = 30000;
+const q = new URLSearchParams(location.search);
+const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '' };
+const S = { data: null, imgs: {}, imgV: {}, tick: null };
+const app = document.getElementById('app');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function call(fn, ...args) {
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'エラー');
+  return j.result;
+}
+function setParam() {
+  const u = new URL(location.href);
+  u.searchParams.set('t', P.tid); u.searchParams.set('mode', P.mode);
+  history.replaceState(null, '', u);
+}
+
+/* --- 大会の選択（URLに t がないとき） --- */
+async function pick() {
+  app.innerHTML = '<div class="empty">読み込み中…</div>';
+  try {
+    const r = await call('getPopState', '');
+    app.innerHTML = `<div class="pick"><h2>表示する大会を選んでください</h2>${r.tournaments.length ? r.tournaments.map(t => `<button onclick="choose('${esc(t.id)}')">${esc(t.name)}</button>`).join('') : '<div>表示中の大会がありません。</div>'}</div>`;
+  } catch (e) { app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function choose(id) { P.tid = id; setParam(); start(); }
+
+/* --- 表示 --- */
+function addDay(d, n) { const x = new Date(d + 'T00:00:00+09:00'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
+function recvAt(date, hm) { if (!hm) return ''; const [h] = hm.split(':').map(Number); return (h < 5 ? addDay(date, 1) : date) + ' ' + hm.padStart(5, '0'); }
+function nowStr() {
+  // サーバー時刻を基準に、取得からの経過分を足す（端末の時計がずれていても表示がずれないように）
+  const base = new Date(S.data.now.replace(' ', 'T') + ':00+09:00').getTime() + (Date.now() - S.fetchedAt);
+  const d = new Date(base + 9 * 3600000).toISOString();
+  return d.slice(0, 10) + ' ' + d.slice(11, 16);
+}
+function tiles() {
+  const d = S.data, now = nowStr(), map = new Map();
+  d.items.forEach(it => { if (!map.has(it.base)) map.set(it.base, []); map.get(it.base).push(it); });
+  const out = [];
+  map.forEach((rs, base) => {
+    const cur = rs.filter(r => (!r.recv || recvAt(d.date, r.recv) <= now) && (!r.exp || now < r.exp));
+    const fut = rs.filter(r => r.recv && recvAt(d.date, r.recv) > now).map(r => r.recv).sort();
+    let st;
+    if (cur.some(r => !r.sold)) st = 'on';
+    else if (cur.length) st = 'sold';
+    else if (fut.length) st = 'soon';
+    else st = 'ended';
+    if (P.mode === 'now' && (st === 'soon' || st === 'ended')) return;
+    out.push({ base, st, from: fut[0] || '', info: d.info[base] || {} });
+  });
+  return out;
+}
+function layout(n) {
+  const m = document.querySelector('main'); if (!m || !n) return;
+  const cs = getComputedStyle(m);
+  const W = m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+  const H = m.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 2, ratio = 1.05; // 高さ = 幅 × ratio
+  let best = { tw: 0 };
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c), gap = Math.max(8, Math.min(W, H) * 0.018);
+    const tw = Math.min((W - gap * (c - 1)) / c, (H - gap * (r - 1)) / r / ratio);
+    if (tw > best.tw) best = { tw, c, gap };
+  }
+  const g = document.querySelector('.grid');
+  g.style.setProperty('--cols', best.c); g.style.setProperty('--tw', best.tw + 'px');
+  g.style.setProperty('--th', best.tw * ratio + 'px'); g.style.setProperty('--gap', best.gap + 'px');
+}
+function render() {
+  const d = S.data;
+  const list = tiles();
+  const hm = nowStr().slice(11);
+  app.innerHTML = `<header><h1>軽食メニュー<small>${esc(d.name)}</small></h1><div class="clock">${hm}</div></header>
+    <main>${list.length ? `<div class="grid">${list.map(t => {
+      const img = S.imgs[t.base];
+      const price = t.info.price !== '' && t.info.price != null ? '¥' + Number(t.info.price).toLocaleString('ja-JP') : '';
+      const badge = t.st === 'on' ? '<span class="st on">販売中</span>' : t.st === 'soon' ? `<span class="st soon">${esc(t.from)}から販売</span>` : '';
+      return `<div class="tile ${t.st === 'sold' || t.st === 'ended' ? 'sold' : t.st}">
+        <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
+        <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
+    }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
+    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="fs()">全画面</button><button onclick="P.tid='';pick()">大会を変更</button></div>`;
+  layout(list.length);
+}
+function toggleMode() { P.mode = P.mode === 'now' ? 'all' : 'now'; setParam(); render(); }
+function fs() { const e = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : e.requestFullscreen && e.requestFullscreen()); }
+
+async function load() {
+  try {
+    const d = await call('getPopState', P.tid, P.date);
+    S.data = d; S.fetchedAt = Date.now();
+    document.getElementById('off').style.display = 'none';
+    // 写真は更新日時が変わったものだけ取り直す
+    const need = Object.keys(d.info).filter(n => d.info[n].img && S.imgV[n] !== d.info[n].v);
+    Object.keys(S.imgs).forEach(n => { if (!d.info[n] || !d.info[n].img) { delete S.imgs[n]; delete S.imgV[n]; } });
+    if (need.length) {
+      const im = await call('getPopImages', need);
+      need.forEach(n => { if (im[n]) { S.imgs[n] = im[n]; S.imgV[n] = d.info[n].v; } });
+    }
+    render();
+  } catch (e) {
+    if (!S.data) app.innerHTML = `<div class="empty">${esc(e.message)}<br><small>しばらくすると自動で再読み込みします</small></div>`;
+    else document.getElementById('off').style.display = 'block';
+  }
+}
+function start() {
+  clearInterval(S.tick);
+  app.innerHTML = '<div class="empty">読み込み中…</div>';
+  load();
+  S.tick = setInterval(() => { load(); }, POLL);
+}
+setInterval(() => { if (S.data) render(); }, 60000); // 受取時刻・賞味期限の到来を反映
+window.addEventListener('resize', () => { if (S.data) render(); });
+P.tid ? start() : pick();
+</script>
+</body>
+</html>
