@@ -70,6 +70,8 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .popctl{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
 .popctl input{width:110px;padding:8px;font-size:15px}
 .seg{display:flex;gap:6px;margin-top:4px}.seg button{flex:1;padding:8px 4px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;color:inherit}.seg button.on{background:#1a73e8;border-color:#1a73e8;color:#fff;font-weight:700}
+.bulk label.btn{padding:12px 16px;border-radius:10px;font-weight:600;cursor:pointer}
+.bulk{margin:12px 0 4px;padding:12px;border:1px dashed #c9ced6;border-radius:10px;background:#fafbfc}.bulklist{margin-top:8px}.bulkrow{display:flex;gap:10px;padding:8px 0;border-top:1px solid #eceff3}.bulkrow select{width:100%;margin-top:4px;font-size:15px;padding:6px}
 .filebtn{position:relative;overflow:hidden}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .empty{color:var(--sub);text-align:center;padding:24px 0}
@@ -547,6 +549,7 @@ function renderAdminPop() {
     ${urlRow('販売中の品目のみ（受取済み・賞味期限内）', 'now')}${urlRow('当日の全品目（受取前は「○:○○から販売」）', 'all')}</div>
     <div class="card"><div style="font-weight:700">写真と価格</div>
     <div class="small" style="margin-top:4px">品目名ごとに登録します。同じ品目名なら、他の大会でもそのまま使われます。写真は自動で縮小して保存します。</div>
+    ${p.list && p.list.length ? bulkHtml() : ''}
     ${p.list == null ? '<div class="empty">読み込み中…</div>' : p.list.length ? p.list.map((it, k) => `<div class="poprow">
       <div class="popimg">${it.img ? `<img src="${it.img}" alt="">` : '<span>写真なし</span>'}</div>
       <div class="popbody"><div style="font-weight:700">${esc(it.name)}</div>
@@ -556,6 +559,55 @@ function renderAdminPop() {
 }
 function copyText(t) {
   (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('コピーしました'), () => toast('長押しでコピーしてください'));
+}
+/* ---- 写真の一括登録：複数枚選び、ファイル名から品目を自動で割り当てる ---- */
+const normName = s => String(s || '').normalize('NFKC').toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[\s_\-・･()（）\[\]【】「」]/g, '');
+function guessItem(fname) {
+  const f = normName(fname), names = S.pop.list.map(x => normName(x.name));
+  let k = names.indexOf(f); if (k >= 0) return k;
+  let best = -1, len = 0, tie = false;
+  names.forEach((n, i) => { if (n && (f.includes(n) || n.includes(f)) && f) { if (n.length > len) { best = i; len = n.length; tie = false; } else if (n.length === len) tie = true; } });
+  return tie ? -1 : best;
+}
+async function popBulkPick(input) {
+  const files = [...(input.files || [])]; input.value = ''; if (!files.length) return;
+  const p = S.pop; p.bulk = p.bulk || []; p.bulkMsg = '写真を読み込み中…'; render();
+  for (const f of files) {
+    try { p.bulk.push({ fname: f.name, img: await shrinkImage(f), k: guessItem(f.name) }); } catch (e) { toast(f.name + '：' + (e.message || '読み込めませんでした')); }
+    p.bulkMsg = `写真を読み込み中…（${p.bulk.length}/${files.length}）`; render();
+  }
+  p.bulkMsg = ''; render();
+}
+function bulkSet(i, v) { S.pop.bulk[i].k = Number(v); render(); }
+function bulkDel(i) { S.pop.bulk.splice(i, 1); if (!S.pop.bulk.length) S.pop.bulk = null; render(); }
+function bulkCancel() { S.pop.bulk = null; render(); }
+async function bulkSave() {
+  const p = S.pop, todo = p.bulk.filter(b => b.k >= 0);
+  if (!todo.length) return toast('品目を割り当ててください');
+  p.list.forEach((x, i) => { const e = document.getElementById('pp' + i); if (e) x.price = e.value; });
+  let n = 0;
+  for (const b of todo) {
+    const it = p.list[b.k]; p.bulkMsg = `登録中…（${++n}/${todo.length}）`; render();
+    try { const r = await call('adminPopSave', S.admin.pin, it.name, it.price, b.img); p.list[b.k] = { name: r.name, price: r.price, img: r.img }; b.done = true; }
+    catch (e) { toast(it.name + '：' + netMsg(e)); }
+  }
+  p.bulk = p.bulk.filter(b => !b.done); if (!p.bulk.length) p.bulk = null;
+  p.bulkMsg = ''; toast(`${todo.length - (p.bulk ? p.bulk.filter(b => b.k >= 0).length : 0)}枚登録しました`); render();
+}
+function bulkHtml() {
+  const p = S.pop, b = p.bulk || [];
+  const cnt = {}; b.forEach(x => { if (x.k >= 0) cnt[x.k] = (cnt[x.k] || 0) + 1; });
+  const assigned = b.filter(x => x.k >= 0).length;
+  return `<div class="bulk"><label class="btn filebtn" style="display:block;text-align:center;box-sizing:border-box">写真をまとめて選ぶ<input type="file" accept="image/*" multiple onchange="popBulkPick(this)" ${p.bulkMsg ? 'disabled' : ''}></label>
+    <div class="small" style="margin-top:6px">ファイル名を品目名にしておくと自動で割り当てます（例：「おにぎり 高菜.jpg」）。合わないものは一覧で品目を選びます。</div>
+    ${p.bulkMsg ? `<div class="small" style="margin-top:6px;font-weight:700">${esc(p.bulkMsg)}</div>` : ''}
+    ${b.length ? `<div class="bulklist">${b.map((x, i) => `<div class="bulkrow">
+      <div class="popimg"><img src="${x.img}" alt=""></div>
+      <div class="popbody"><div class="small" style="word-break:break-all">${esc(x.fname)}</div>
+        <select onchange="bulkSet(${i}, this.value)"><option value="-1">（品目を選ぶ）</option>${p.list.map((it, k) => `<option value="${k}" ${x.k === k ? 'selected' : ''}>${esc(it.name)}${it.img ? '（写真あり→差し替え）' : ''}</option>`).join('')}</select>
+        ${x.k >= 0 && cnt[x.k] > 1 ? '<div class="small" style="color:#b3261e">同じ品目に複数の写真が割り当てられています（後の写真が残ります）</div>' : ''}
+        <button class="link" onclick="bulkDel(${i})">この写真を外す</button></div></div>`).join('')}</div>
+      <div class="popctl" style="margin-top:8px"><button class="btn" style="flex:2" ${p.bulkMsg || !assigned ? 'disabled' : ''} onclick="bulkSave()">割り当てた${assigned}枚を登録</button><button class="btn-sub" ${p.bulkMsg ? 'disabled' : ''} onclick="bulkCancel()">やめる</button></div>` : ''}</div>`;
 }
 async function popSave(k, img) {
   const it = S.pop.list[k];
