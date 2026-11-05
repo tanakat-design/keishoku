@@ -70,25 +70,30 @@ body.b-spadie{background-color:#113465}
 .b-spadie .tile.sold .ph{background:#1b2c45}
 .b-spadie .ctl button{color:#113465;border-color:#fff}
 .b-spadie .empty{font-family:"DotGothic16",sans-serif;color:#fff}
-/* ---- JOPT（白 / #c86b30）。ロゴは支給画像の切り出しのみ ---- */
-.b-jopt #app{--acc:#c86b30;--text:#2b2b2b;--sub:#7a7a7a;--line:#ece4dc;font-family:"Noto Sans JP",-apple-system,sans-serif;background:#fff}
+/* ---- JOPT（白 / #c86b30）。ロゴは支給画像の切り出しのみ。フォントはすべて こぶりなゴシック Std（表示する端末にインストールされたものを使う。無い端末は Noto Sans JP） ---- */
+@font-face{font-family:"JOPT Koburina";font-weight:300;src:local("KoburinaGoStd-W1"),local("Koburina Gothic Std W1"),local("こぶりなゴシック Std W1"),local("KoburinaGoStdN-W1"),local("Koburina Gothic StdN W1"),local("こぶりなゴシック StdN W1")}
+@font-face{font-family:"JOPT Koburina";font-weight:400;src:local("KoburinaGoStd-W3"),local("Koburina Gothic Std W3"),local("こぶりなゴシック Std W3"),local("KoburinaGoStdN-W3"),local("Koburina Gothic StdN W3"),local("こぶりなゴシック StdN W3")}
+@font-face{font-family:"JOPT Koburina";font-weight:600;src:local("KoburinaGoStd-W6"),local("Koburina Gothic Std W6"),local("こぶりなゴシック Std W6"),local("KoburinaGoStdN-W6"),local("Koburina Gothic StdN W6"),local("こぶりなゴシック StdN W6")}
+@font-face{font-family:"JOPT Koburina";font-weight:700;src:local("KoburinaGoStd-W6"),local("Koburina Gothic Std W6"),local("こぶりなゴシック Std W6"),local("KoburinaGoStdN-W6"),local("Koburina Gothic StdN W6"),local("こぶりなゴシック StdN W6")}
+@font-face{font-family:"JOPT Koburina";font-weight:900;src:local("KoburinaGoStd-W9"),local("Koburina Gothic Std W9"),local("こぶりなゴシック Std W9"),local("KoburinaGoStdN-W9"),local("Koburina Gothic StdN W9"),local("こぶりなゴシック StdN W9")}
+.b-jopt #app{--acc:#c86b30;--text:#2b2b2b;--sub:#7a7a7a;--line:#ece4dc;font-family:"JOPT Koburina","Noto Sans JP",-apple-system,sans-serif;background:#fff}
 .b-jopt header{background:transparent;border-bottom:1px solid var(--line);align-items:center;padding:calc(var(--u)*1.6) calc(var(--w)*3) calc(var(--u)*1.4)}
 .b-jopt header h1{display:flex;align-items:center;gap:calc(var(--w)*2.2)}
 .b-jopt header .logo{display:block;height:calc(var(--u)*15);width:auto}
 .b-jopt header h1 .ttl{display:flex;flex-direction:column;gap:calc(var(--u)*.9)}
-.b-jopt header h1 .t{font-weight:500;letter-spacing:.32em;font-size:calc(var(--u)*4.4);color:var(--text);line-height:1.1}
-.b-jopt header h1 small{margin:0;font-family:"Montserrat",sans-serif;font-weight:600;letter-spacing:.2em;font-size:calc(var(--u)*1.8);color:var(--acc)}
-.b-jopt header .clock{font-family:"Montserrat",sans-serif;font-weight:500;letter-spacing:.06em;font-size:calc(var(--u)*4);color:var(--text)}
+.b-jopt header h1 .t{font-weight:400;letter-spacing:.32em;font-size:calc(var(--u)*4.4);color:var(--text);line-height:1.1}
+.b-jopt header h1 small{margin:0;font-weight:600;letter-spacing:.2em;font-size:calc(var(--u)*1.8);color:var(--acc)}
+.b-jopt header .clock{font-weight:400;letter-spacing:.06em;font-size:calc(var(--u)*4);color:var(--text)}
 .b-jopt main{padding:calc(var(--u)*2.4) calc(var(--w)*3)}
 .b-jopt .tile{background:#fff;border:1px solid var(--line);border-radius:calc(var(--u)*.5);box-shadow:0 calc(var(--u)*.3) calc(var(--u)*1.4) rgba(90,45,15,.08)}
 .b-jopt .ph{background:#f6f1ec}
-.b-jopt .ph .ini{color:#e3cdbd;font-weight:500}
-.b-jopt .nm{font-weight:500;color:var(--text);letter-spacing:.04em}
-.b-jopt .pr{font-family:"Montserrat",sans-serif;font-weight:600;color:var(--acc);letter-spacing:.04em}
-.b-jopt .st{font-weight:500;border-radius:2px;letter-spacing:.12em}
+.b-jopt .ph .ini{color:#e3cdbd;font-weight:300}
+.b-jopt .nm{font-weight:400;color:var(--text);letter-spacing:.04em}
+.b-jopt .pr{font-weight:600;color:var(--acc);letter-spacing:.04em}
+.b-jopt .st{font-weight:600;border-radius:2px;letter-spacing:.12em}
 .b-jopt .st.on{background:var(--acc);color:#fff}
 .b-jopt .st.soon{background:transparent;color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
-.b-jopt .band{background:rgba(255,255,255,.92);color:var(--acc);font-family:"Montserrat",sans-serif;font-weight:600;letter-spacing:.32em;font-size:calc(var(--tw)*.1);border-top:1px solid var(--acc);border-bottom:1px solid var(--acc)}
+.b-jopt .band{background:rgba(255,255,255,.92);color:var(--acc);font-weight:600;letter-spacing:.32em;font-size:calc(var(--tw)*.1);border-top:1px solid var(--acc);border-bottom:1px solid var(--acc)}
 .b-jopt .tile.sold .ph img{opacity:.45}
 .b-jopt .empty{color:var(--sub);letter-spacing:.12em}
 .b-jopt-o #app{background:#c86b30;--line:rgba(255,255,255,.4)}
