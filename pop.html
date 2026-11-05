@@ -79,8 +79,8 @@ const POLL = 30000;
 const q = new URLSearchParams(location.search);
 const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase() };
 // ブランド別デザイン：URLの brand（jopt / spadie）を優先し、なければ大会名に SPADIE を含むかで決める
-// SPADIE：assets/spadie.png（支給されたロゴ画像そのもの）から、表示時にロゴ部分と背景柄の1区画を切り出して使う。画像は加工しない
-const BRAND = { spadie: { src: 'assets/spadie.png', crop: { x: 40, y: 285, w: 1120, h: 620 }, tile: { x: 0, y: 0, w: 546, h: 274 } } };
+// SPADIE：assets/LINE_ALBUM_SPADIE ロゴ_260908_2.png（支給されたロゴ画像そのもの）から、表示時にロゴ部分と背景柄の1区画を切り出して使う。画像は加工しない
+const BRAND = { spadie: { src: 'assets/' + encodeURIComponent('LINE_ALBUM_SPADIE ロゴ_260908_2.png'), crop: { x: 40, y: 285, w: 1120, h: 620 }, tile: { x: 0, y: 0, w: 546, h: 274 } } };
 function cut(img, r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return c.toDataURL('image/png'); }
 function prepBrand(B) {
   if (!B.src || B.ready || B.loading) return;
