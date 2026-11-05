@@ -69,6 +69,7 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .popbody{flex:1;min-width:0}
 .popctl{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
 .popctl input{width:110px;padding:8px;font-size:15px}
+.seg{display:flex;gap:6px;margin-top:4px}.seg button{flex:1;padding:8px 4px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;color:inherit}.seg button.on{background:#1a73e8;border-color:#1a73e8;color:#fff;font-weight:700}
 .filebtn{position:relative;overflow:hidden}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .empty{color:var(--sub);text-align:center;padding:24px 0}
@@ -526,11 +527,12 @@ async function setActive(i, on) {
 const POP_BASE = 'https://tanakat-design.github.io/keishoku/pop.html';
 async function popT(i) {
   const t = S.admin.list[i];
-  S.pop = { id: t.id, name: t.name, list: null, busy: '' }; S.view = 'adminPop'; render();
+  S.pop = { id: t.id, name: t.name, list: null, busy: '', orient: 'h' }; S.view = 'adminPop'; render();
   try { S.pop.list = await call('adminPopList', S.admin.pin, t.id); } catch (e) { toast(netMsg(e)); S.pop.list = []; }
   render();
 }
-function popUrl(mode) { return POP_BASE + '?t=' + encodeURIComponent(S.pop.id) + '&mode=' + mode; }
+function popUrl(mode) { return POP_BASE + '?t=' + encodeURIComponent(S.pop.id) + '&mode=' + mode + (S.pop.orient !== 'h' ? '&orient=' + S.pop.orient : ''); }
+function popOrient(o) { S.pop.orient = o; render(); }
 function renderAdminPop() {
   hideBar();
   const p = S.pop;
@@ -539,6 +541,9 @@ function renderAdminPop() {
   app.innerHTML = `<div class="header"><h1>POP設定</h1><button class="link" onclick="S.view='adminList';render()">戻る</button></div>
     <div class="card"><div style="font-weight:700">${esc(p.name)}</div>
     <div class="small" style="margin-top:4px">会場のモニターでPOPのURLを開くと、在庫のある軽食は写真付き、在庫切れはモノクロで「SOLD OUT」と表示します。30秒ごとに自動更新します。表示の切り替えは画面右下（マウスを乗せると表示）からもできます。</div>
+    <div class="small" style="margin-top:10px">モニターの向き</div>
+    <div class="seg">${[['h', '横'], ['v', '縦'], ['v2', '縦（上下逆）']].map(([o, l]) => `<button class="${p.orient === o ? 'on' : ''}" onclick="popOrient('${o}')">${l}</button>`).join('')}</div>
+    <div class="small" style="margin-top:4px">縦置きのテレビが映像を回転できず横長のまま映す場合も、「縦」で画面を90°回して表示します。上下が逆になるときは「縦（上下逆）」を選びます。</div>
     ${urlRow('販売中の品目のみ（受取済み・賞味期限内）', 'now')}${urlRow('当日の全品目（受取前は「○:○○から販売」）', 'all')}</div>
     <div class="card"><div style="font-weight:700">写真と価格</div>
     <div class="small" style="margin-top:4px">品目名ごとに登録します。同じ品目名なら、他の大会でもそのまま使われます。写真は自動で縮小して保存します。</div>
