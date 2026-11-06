@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>軽食メニュー</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Montserrat:wght@500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Google Fonts は head で読まない（描画が止まるため）。必要なブランドのときだけ loadFont() が後から読む -->
 <style>
 :root{--u:1vh;--w:1vw;--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
 *{box-sizing:border-box}
@@ -126,6 +125,7 @@ body.b-spadie{background-color:#113465}
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
 const POLL = 30000;
+const TIMEOUT = 25000; // 1回の取得をあきらめるまでの時間。POLL より短くして要求が重ならないようにする
 const q = new URLSearchParams(location.search);
 const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase(), orient: ['v', 'v2'].includes(q.get('orient')) ? q.get('orient') : 'h' };
 // ブランド別デザイン：URLの brand（jopt / spadie）を優先し、なければ大会名に SPADIE を含むかで決める
@@ -136,6 +136,19 @@ const BRAND = {
   'jopt-w': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：白背景
   'jopt-o': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：#c86b30 背景
 };
+// Webフォントは必要なときだけ、描画のあとに読む。標準デザインは端末のフォントだけで表示するため何も読まない
+// SPADIE は DotGothic16 が要る。JOPT は こぶりなゴシック Std が端末に無いときだけ Noto Sans JP を読む
+function loadFont(b, cls) {
+  let fam = '';
+  if (b === 'spadie') fam = 'family=DotGothic16';
+  else if (cls === 'b-jopt' && !hasFont('JOPT Koburina')) fam = 'family=Noto+Sans+JP:wght@300;400;600;900';
+  if (!fam || S.font === fam) return;
+  S.font = fam;
+  const l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?' + fam + '&display=swap';
+  document.head.appendChild(l);
+}
+function hasFont(n) { try { return document.fonts.check('16px "' + n + '"'); } catch (e) { return false; } }
 function cut(img, r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return toBlobUrl(c.toDataURL('image/png')); }
 function prepBrand(B) {
   if (!B.src || B.ready || B.loading) return;
@@ -157,7 +170,8 @@ const app = document.getElementById('app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function call(fn, ...args) {
-  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) });
+  // S.ac があるとき（load 中）は、その AbortController で打ち切れるようにする
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }), signal: S.ac ? S.ac.signal : undefined });
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || 'エラー');
   return j.result;
@@ -251,6 +265,7 @@ function render() {
   const hm = nowStr().slice(11);
   const b = brandOf(d.name), B = BRAND[b] || {};
   document.body.className = 'b-' + b + (B.cls ? ' ' + B.cls : '');
+  loadFont(b, B.cls);
   orient();
   prepBrand(B);
   const bgi = B.bg ? `url(${B.bg})` : ''; if (S.bgi !== bgi) { app.style.backgroundImage = bgi; S.bgi = bgi; }
@@ -296,25 +311,68 @@ function toBlobUrl(d) {
   const bin = atob(m[2]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([a], { type: m[1] }));
 }
+// 写真の保存庫（IndexedDB）。キーは品目名、値は {v, d}（版と dataURL）。
+// 再読み込みのたびに GAS から数百KBを取り直さないために使う。使えない端末では単に効かないだけにする
+const DB = { p: null };
+// 保存庫の処理は必ず決着させる。決着しないと load() の S.busy が戻らず、以後の取得が止まるため
+function settle(p, ms, fallback) {
+  return Promise.race([p, new Promise(res => setTimeout(() => res(fallback), ms))]).catch(() => fallback);
+}
+function db() {
+  if (DB.p) return DB.p;
+  DB.p = settle(new Promise(res => {
+    let q; try { q = indexedDB.open('pop', 1); } catch (e) { return res(null); }
+    q.onupgradeneeded = () => q.result.createObjectStore('img');
+    q.onsuccess = () => res(q.result);
+    q.onerror = q.onblocked = () => res(null);
+  }), 3000, null);
+  return DB.p;
+}
+function dbAll() {
+  return settle(db().then(d => {
+    if (!d) return {};
+    return new Promise(res => {
+      const out = {}, t = d.transaction('img'), c = t.objectStore('img').openCursor();
+      t.onabort = t.onerror = () => res(out); // 要求のエラーを伴わない中断でも決着させる
+      c.onsuccess = e => { const k = e.target.result; if (!k) return res(out); out[k.key] = k.value; k.continue(); };
+      c.onerror = () => res(out);
+    });
+  }), 3000, {});
+}
+function dbPut(n, v, d) { db().then(x => { if (x) x.transaction('img', 'readwrite').objectStore('img').put({ v, d }, n); }).catch(() => { }); }
+function dbDel(n) { db().then(x => { if (x) x.transaction('img', 'readwrite').objectStore('img').delete(n); }).catch(() => { }); }
+
 async function load() {
+  if (S.busy) return; // 前の通信が終わるまで次を出さない（遅いときに要求が積み上がるのを防ぐ）
   if (document.hidden && S.data) return; // 画面が見えていないときは通信しない
+  S.busy = true;
+  S.ac = new AbortController();
+  const to = setTimeout(() => S.ac.abort(), TIMEOUT); // 返ってこない通信は打ち切る
   try {
+    if (!S.cache) S.cache = await dbAll(); // 保存庫を起動時に1回だけ読む
     const d = await call('getPopState', P.tid, P.date);
     S.data = d; S.fetchedAt = Date.now();
     document.getElementById('off').style.display = 'none';
-    // 写真は更新日時が変わったものだけ取り直す
-    const need = Object.keys(d.info).filter(n => d.info[n].img && S.imgV[n] !== d.info[n].v);
+    // 写真は更新日時が変わったものだけ取り直す。保存庫に同じ版があれば通信しない
+    const need = Object.keys(d.info).filter(n => d.info[n].img && S.imgV[n] !== d.info[n].v && !useCached(n, d.info[n].v));
+    Object.keys(S.cache).forEach(n => { if (!d.info[n] || !d.info[n].img) { delete S.cache[n]; dbDel(n); } });
     Object.keys(S.imgs).forEach(n => { if (!d.info[n] || !d.info[n].img) { URL.revokeObjectURL(S.imgs[n]); delete S.imgs[n]; delete S.imgV[n]; } });
     if (need.length) {
       const im = await call('getPopImages', need);
-      need.forEach(n => { if (im[n]) { if (S.imgs[n]) URL.revokeObjectURL(S.imgs[n]); S.imgs[n] = toBlobUrl(im[n]); S.imgV[n] = d.info[n].v; } });
+      need.forEach(n => { if (im[n]) { setImg(n, d.info[n].v, im[n]); S.cache[n] = { v: d.info[n].v, d: im[n] }; dbPut(n, d.info[n].v, im[n]); } });
     }
     render();
   } catch (e) {
-    if (!S.data) app.innerHTML = `<div class="empty">${esc(e.message)}<br><small>しばらくすると自動で再読み込みします</small></div>`;
+    const msg = e.name === 'AbortError' ? '通信がとても遅いため中断した' : e.message;
+    if (!S.data) app.innerHTML = `<div class="empty">${esc(msg)}<br><small>しばらくすると自動で再読み込みします</small></div>`;
     else document.getElementById('off').style.display = 'block';
+  } finally {
+    clearTimeout(to); S.ac = null; S.busy = false;
   }
 }
+function setImg(n, v, d) { if (S.imgs[n]) URL.revokeObjectURL(S.imgs[n]); S.imgs[n] = toBlobUrl(d); S.imgV[n] = v; }
+// 保存庫に同じ版があればそれを使い、true を返す（＝GASに取りに行かない）
+function useCached(n, v) { const c = S.cache[n]; if (!c || c.v !== v) return false; setImg(n, v, c.d); return true; }
 function start() {
   clearInterval(S.tick);
   app.innerHTML = '<div class="empty">読み込み中…</div>';
