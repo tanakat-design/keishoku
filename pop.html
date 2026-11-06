@@ -165,13 +165,13 @@ function brandOf(name) {
   if (/jopt/i.test(name || '') && /osaka/i.test(name || '')) return 'jopt-w';
   return 'std';
 }
-const S = { data: null, imgs: {}, imgV: {}, tick: null };
+const S = { data: null, imgs: {}, imgV: {}, tick: null, gen: 0 }; // gen：大会を切り替えた回数。古い取得の結果を捨てるために使う
 const app = document.getElementById('app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-async function call(fn, ...args) {
-  // S.ac があるとき（load 中）は、その AbortController で打ち切れるようにする
-  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }), signal: S.ac ? S.ac.signal : undefined });
+// sig は打ち切り用。取得ごとに別の AbortController を渡す（共有すると古い取得が新しい取得を巻き込む）
+async function call(sig, fn, ...args) {
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }), signal: sig || undefined });
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || 'エラー');
   return j.result;
@@ -185,11 +185,13 @@ function setParam() {
 
 /* --- 大会の選択（URLに t がないとき） --- */
 async function pick() {
+  const gen = S.gen; // 遅れて届いた一覧が、選択後の大会画面を上書きしないようにする
   app.innerHTML = '<div class="empty">読み込み中…</div>';
   try {
-    const r = await call('getPopState', '');
+    const r = await call(null, 'getPopState', '');
+    if (gen !== S.gen) return;
     app.innerHTML = `<div class="pick"><h2>表示する大会を選んでください</h2>${r.tournaments.length ? r.tournaments.map(t => `<button onclick="choose('${esc(t.id)}')">${esc(t.name)}</button>`).join('') : '<div>表示中の大会がありません。</div>'}</div>`;
-  } catch (e) { app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  } catch (e) { if (gen === S.gen) app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function choose(id) { P.tid = id; setParam(); start(); }
 
@@ -278,7 +280,7 @@ function render() {
         <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
         <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
     }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
-    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button><button onclick="P.tid='';pick()">大会を変更</button></div>`;
+    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button><button onclick="backToPick()">大会を変更</button></div>`;
   // 表示内容が前回と同じなら作り直さず時計だけ更新する（写真を含む画面全体の再構築とスクロールのやり直しを避ける）
   const key = html.replace(/<div class="clock">[^<]*<\/div>/, '') + '|' + innerWidth + 'x' + innerHeight + '|' + P.orient + '|' + !!B.logo;
   if (key === S.lastKey && app.querySelector('main')) { const c = app.querySelector('.clock'); if (c && c.textContent !== hm) c.textContent = hm; return; }
@@ -311,8 +313,8 @@ function toBlobUrl(d) {
   const bin = atob(m[2]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([a], { type: m[1] }));
 }
-// 写真の保存庫（IndexedDB）。キーは品目名、値は {v, d}（版と dataURL）。
-// 再読み込みのたびに GAS から数百KBを取り直さないために使う。使えない端末では単に効かないだけにする
+// 保存庫（IndexedDB 'pop'）。img ストアは写真（キー＝品目名、値＝{v, d}）、state ストアは前回の表示内容。
+// 再読み込みのたびに GAS から取り直さないために使う。使えない端末では単に効かないだけにする
 const DB = { p: null };
 // 保存庫の処理は必ず決着させる。決着しないと load() の S.busy が戻らず、以後の取得が止まるため
 function settle(p, ms, fallback) {
@@ -321,8 +323,12 @@ function settle(p, ms, fallback) {
 function db() {
   if (DB.p) return DB.p;
   DB.p = settle(new Promise(res => {
-    let q; try { q = indexedDB.open('pop', 1); } catch (e) { return res(null); }
-    q.onupgradeneeded = () => q.result.createObjectStore('img');
+    let q; try { q = indexedDB.open('pop', 2); } catch (e) { return res(null); }
+    q.onupgradeneeded = () => {
+      const x = q.result;
+      if (!x.objectStoreNames.contains('img')) x.createObjectStore('img');
+      if (!x.objectStoreNames.contains('state')) x.createObjectStore('state');
+    };
     q.onsuccess = () => res(q.result);
     q.onerror = q.onblocked = () => res(null);
   }), 3000, null);
@@ -339,46 +345,99 @@ function dbAll() {
     });
   }), 3000, {});
 }
-function dbPut(n, v, d) { db().then(x => { if (x) x.transaction('img', 'readwrite').objectStore('img').put({ v, d }, n); }).catch(() => { }); }
+function dbGet(store, key) {
+  return settle(db().then(d => {
+    if (!d) return null;
+    return new Promise(res => {
+      const t = d.transaction(store), r = t.objectStore(store).get(key);
+      t.onabort = t.onerror = () => res(null);
+      r.onsuccess = () => res(r.result || null);
+      r.onerror = () => res(null);
+    });
+  }), 3000, null);
+}
+function dbSet(store, key, val) { db().then(x => { if (x) x.transaction(store, 'readwrite').objectStore(store).put(val, key); }).catch(() => { }); }
+function dbPut(n, v, d) { dbSet('img', n, { v, d }); }
 function dbDel(n) { db().then(x => { if (x) x.transaction('img', 'readwrite').objectStore('img').delete(n); }).catch(() => { }); }
+
+// 営業日（JST の 現在−5時間 の日付）。保存した内容が今日のものかを、通信せずに判定するために使う
+function bizDate() { return new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 10); }
+// 前回の表示内容を先に出してから通信する。回線が遅い会場でも、開いた瞬間に画面が出るようにする
+async function restore(gen) {
+  if (S.data) return;
+  const s = await dbGet('state', 'last');
+  if (gen !== S.gen || S.data) return; // 待っている間に大会が切り替わった／取得が先に届いた
+  if (!s || !s.d || s.tid !== P.tid) return;
+  if (s.d.date !== (P.date || bizDate())) return; // 日が違えば使わない
+  if (Date.now() - s.at > 86400000) return;       // 1日以上前のものは使わない
+  Object.keys(s.d.info || {}).forEach(n => { if (s.d.info[n].img) useCached(n, s.d.info[n].v); });
+  S.data = s.d; S.fetchedAt = s.at; // 時計は「保存時のサーバー時刻＋経過時間」で正しく進む
+  document.getElementById('off').style.display = 'block'; // 「前回の表示のまま」。取得できた時点で消える
+  render();
+}
 
 async function load() {
   if (S.busy) return; // 前の通信が終わるまで次を出さない（遅いときに要求が積み上がるのを防ぐ）
   if (document.hidden && S.data) return; // 画面が見えていないときは通信しない
+  const gen = S.gen; // この取得が始まった時点の大会。途中で切り替わったら結果を捨てる
   S.busy = true;
-  S.ac = new AbortController();
-  const to = setTimeout(() => S.ac.abort(), TIMEOUT); // 返ってこない通信は打ち切る
+  const ac = new AbortController(); // この取得専用。共有すると、古い取得のタイマーが新しい取得を打ち切ってしまう
+  S.ac = ac;                        // start() から打ち切れるように控えるだけ
+  const to = setTimeout(() => ac.abort(), TIMEOUT); // 返ってこない通信は打ち切る
   try {
-    if (!S.cache) S.cache = await dbAll(); // 保存庫を起動時に1回だけ読む
-    const d = await call('getPopState', P.tid, P.date);
+    // 保存庫を起動時に1回だけ読み、前回の表示を先に出す
+    if (!S.cache) {
+      const c = await dbAll();
+      if (gen !== S.gen) return;
+      S.cache = c;
+      await restore(gen);
+      if (gen !== S.gen) return;
+    }
+    const d = await call(ac.signal, 'getPopState', P.tid, P.date);
+    if (gen !== S.gen) return; // 大会が切り替わった。前の大会の内容を保存・表示しない
     S.data = d; S.fetchedAt = Date.now();
+    if (d.info) dbSet('state', 'last', { at: S.fetchedAt, tid: P.tid, d }); // 次に開いたとき即座に出すため保存する（大会一覧は保存しない）
     document.getElementById('off').style.display = 'none';
     // 写真は更新日時が変わったものだけ取り直す。保存庫に同じ版があれば通信しない
     const need = Object.keys(d.info).filter(n => d.info[n].img && S.imgV[n] !== d.info[n].v && !useCached(n, d.info[n].v));
     Object.keys(S.cache).forEach(n => { if (!d.info[n] || !d.info[n].img) { delete S.cache[n]; dbDel(n); } });
     Object.keys(S.imgs).forEach(n => { if (!d.info[n] || !d.info[n].img) { URL.revokeObjectURL(S.imgs[n]); delete S.imgs[n]; delete S.imgV[n]; } });
     if (need.length) {
-      const im = await call('getPopImages', need);
+      const im = await call(ac.signal, 'getPopImages', need);
+      if (gen !== S.gen) return;
       need.forEach(n => { if (im[n]) { setImg(n, d.info[n].v, im[n]); S.cache[n] = { v: d.info[n].v, d: im[n] }; dbPut(n, d.info[n].v, im[n]); } });
     }
     render();
   } catch (e) {
+    if (gen !== S.gen) return; // 大会の切り替えで打ち切っただけ。新しい取得の表示を壊さない
     const msg = e.name === 'AbortError' ? '通信がとても遅いため中断した' : e.message;
     if (!S.data) app.innerHTML = `<div class="empty">${esc(msg)}<br><small>しばらくすると自動で再読み込みします</small></div>`;
     else document.getElementById('off').style.display = 'block';
   } finally {
-    clearTimeout(to); S.ac = null; S.busy = false;
+    clearTimeout(to);
+    if (gen === S.gen) { S.ac = null; S.busy = false; } // 切り替わっていれば reset() が後始末済み。新しい取得を壊さない
   }
 }
 function setImg(n, v, d) { if (S.imgs[n]) URL.revokeObjectURL(S.imgs[n]); S.imgs[n] = toBlobUrl(d); S.imgV[n] = v; }
 // 保存庫に同じ版があればそれを使い、true を返す（＝GASに取りに行かない）
 function useCached(n, v) { const c = S.cache[n]; if (!c || c.v !== v) return false; setImg(n, v, c.d); return true; }
-function start() {
+// 進行中の取得を終わらせ、表示を白紙に戻す。大会を切り替えるときは必ずここを通す
+function reset() {
   clearInterval(S.tick);
+  S.gen++;                                  // 進行中の取得の結果を捨てる
+  if (S.ac) { S.ac.abort(); S.ac = null; }
+  S.busy = false;
+  S.data = null; S.lastKey = null;          // 前の大会を残さない
+  S.cache = null;                           // 切替先の復元をやり直す
+}
+function start() {
+  reset();
   app.innerHTML = '<div class="empty">読み込み中…</div>';
   load();
   S.tick = setInterval(() => { load(); }, POLL);
 }
+// 大会選択に戻る。定期取得も止める（止めないと tid 空で取得し続け、大会一覧を表示内容として扱ってしまう）
+function backToPick() { reset(); P.tid = ''; pick(); }
 setInterval(() => { if (S.data && !document.hidden) render(); }, 20000); // 時計と、受取時刻・賞味期限の到来を反映（内容が変わったときだけ作り直す）
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.data) render(); }, 250); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.data) load(); });
