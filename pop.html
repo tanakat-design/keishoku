@@ -37,8 +37,7 @@ main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(-
 .tile.soon .ph{opacity:.75}
 .scroller{display:flex;flex-direction:column;will-change:transform}
 .scroller .grid{height:auto;align-content:start}
-@keyframes popscroll{from{transform:translateY(0)}to{transform:translateY(var(--dist))}}
-main.scrolling{-webkit-mask-image:linear-gradient(transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(transparent,#000 4%,#000 96%,transparent)}
+@keyframes popscroll{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,var(--dist),0)}}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*4);color:var(--sub);text-align:center;line-height:1.6}
 .ctl{position:fixed;right:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);display:flex;gap:8px;opacity:0;transition:opacity .3s}
 body:hover .ctl,.ctl:focus-within{opacity:1}
@@ -137,7 +136,7 @@ const BRAND = {
   'jopt-w': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：白背景
   'jopt-o': Object.assign({ cls: 'b-jopt' }, JOPT_LOGO), // JOPT：#c86b30 背景
 };
-function cut(img, r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return c.toDataURL('image/png'); }
+function cut(img, r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return toBlobUrl(c.toDataURL('image/png')); }
 function prepBrand(B) {
   if (!B.src || B.ready || B.loading) return;
   B.loading = true;
@@ -240,7 +239,7 @@ function layout(n) {
 // 向き：h＝横、v＝縦、v2＝縦（上下逆）。縦で画面が横長のとき（縦置きのテレビが回転表示できない場合）は90°回転して表示する
 function orient() {
   const a = app.style, W = innerWidth, H = innerHeight, rot = P.orient !== 'h' && W > H;
-  app.className = rot ? (P.orient === 'v' ? 'rot-r' : 'rot-l') : (P.orient === 'v2' ? 'rot-f' : '');
+  app.className = rot ? (P.orient === 'v' ? 'rot-r' : 'rot-l') : '';
   const w = rot ? H : W, h = rot ? W : H;
   a.setProperty('--u', h / 100 + 'px'); a.setProperty('--w', w / 100 + 'px');
   a.transform = !rot && P.orient === 'v2' ? 'rotate(180deg)' : ''; a.transformOrigin = !rot && P.orient === 'v2' ? '50% 50%' : '';
@@ -254,8 +253,8 @@ function render() {
   document.body.className = 'b-' + b + (B.cls ? ' ' + B.cls : '');
   orient();
   prepBrand(B);
-  app.style.backgroundImage = B.bg ? `url(${B.bg})` : '';
-  app.innerHTML = `<header><h1>${B.logo ? `<img class="logo" src="${B.logo}" alt="">` : ''}<span class="ttl"><span class="t">軽食メニュー</span><small>${esc(d.name)}</small></span></h1><div class="clock">${hm}</div></header>
+  const bgi = B.bg ? `url(${B.bg})` : ''; if (S.bgi !== bgi) { app.style.backgroundImage = bgi; S.bgi = bgi; }
+  const html = `<header><h1>${B.logo ? `<img class="logo" src="${B.logo}" alt="">` : ''}<span class="ttl"><span class="t">軽食メニュー</span><small>${esc(d.name)}</small></span></h1><div class="clock">${hm}</div></header>
     <main>${list.length ? `<div class="grid">${list.map(t => {
       const img = S.imgs[t.base];
       const price = t.info.price !== '' && t.info.price != null ? '¥' + Number(t.info.price).toLocaleString('ja-JP') : '';
@@ -265,6 +264,11 @@ function render() {
         <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
     }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
     <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button><button onclick="P.tid='';pick()">大会を変更</button></div>`;
+  // 表示内容が前回と同じなら作り直さず時計だけ更新する（写真を含む画面全体の再構築とスクロールのやり直しを避ける）
+  const key = html.replace(/<div class="clock">[^<]*<\/div>/, '') + '|' + innerWidth + 'x' + innerHeight + '|' + P.orient + '|' + !!B.logo;
+  if (key === S.lastKey && app.querySelector('main')) { const c = app.querySelector('.clock'); if (c && c.textContent !== hm) c.textContent = hm; return; }
+  S.lastKey = key;
+  app.innerHTML = html;
   layout(list.length);
   alignBg(B);
 }
@@ -286,17 +290,24 @@ function toggleOrient() { P.orient = ({ h: 'v', v: 'v2', v2: 'h' })[P.orient]; s
 function toggleMode() { P.mode = P.mode === 'now' ? 'all' : 'now'; setParam(); render(); }
 function fs() { const e = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : e.requestFullscreen && e.requestFullscreen()); }
 
+// 写真の data URL を Blob URL に変える（長い文字列を画面に埋め込まないため軽い）
+function toBlobUrl(d) {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(d); if (!m) return d;
+  const bin = atob(m[2]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([a], { type: m[1] }));
+}
 async function load() {
+  if (document.hidden && S.data) return; // 画面が見えていないときは通信しない
   try {
     const d = await call('getPopState', P.tid, P.date);
     S.data = d; S.fetchedAt = Date.now();
     document.getElementById('off').style.display = 'none';
     // 写真は更新日時が変わったものだけ取り直す
     const need = Object.keys(d.info).filter(n => d.info[n].img && S.imgV[n] !== d.info[n].v);
-    Object.keys(S.imgs).forEach(n => { if (!d.info[n] || !d.info[n].img) { delete S.imgs[n]; delete S.imgV[n]; } });
+    Object.keys(S.imgs).forEach(n => { if (!d.info[n] || !d.info[n].img) { URL.revokeObjectURL(S.imgs[n]); delete S.imgs[n]; delete S.imgV[n]; } });
     if (need.length) {
       const im = await call('getPopImages', need);
-      need.forEach(n => { if (im[n]) { S.imgs[n] = im[n]; S.imgV[n] = d.info[n].v; } });
+      need.forEach(n => { if (im[n]) { if (S.imgs[n]) URL.revokeObjectURL(S.imgs[n]); S.imgs[n] = toBlobUrl(im[n]); S.imgV[n] = d.info[n].v; } });
     }
     render();
   } catch (e) {
@@ -310,8 +321,9 @@ function start() {
   load();
   S.tick = setInterval(() => { load(); }, POLL);
 }
-setInterval(() => { if (S.data) render(); }, 60000); // 受取時刻・賞味期限の到来を反映
-window.addEventListener('resize', () => { if (S.data) render(); });
+setInterval(() => { if (S.data && !document.hidden) render(); }, 20000); // 時計と、受取時刻・賞味期限の到来を反映（内容が変わったときだけ作り直す）
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.data) render(); }, 250); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.data) load(); });
 P.tid ? start() : pick();
 </script>
 </body>
