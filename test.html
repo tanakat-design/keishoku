@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>POP 表示テスト</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.7}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+.lead{color:var(--sub);font-size:14px;margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card h2{font-size:17px;margin:0 0 2px}
+.card .note{color:var(--sub);font-size:13px;margin:0 0 12px}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+a.b{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:8px 14px;background:#fff;color:var(--text);text-decoration:none;font-size:14px}
+a.b:hover{border-color:var(--accent);color:var(--accent)}
+a.b .s{display:block;color:var(--sub);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:4px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--sub);font-weight:500;white-space:nowrap}
+code{background:#eef0f2;border-radius:4px;padding:1px 6px;font-size:13px}
+@media (max-width:420px){body{padding:14px}a.b{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>POP 表示テスト</h1>
+<p class="lead">見本データで POP を表示する。サーバー（GAS）にもスプレッドシートにも触らないので、大会を用意しなくてもデザインを確認できる。通信しないため回線が遅くてもすぐ出る。</p>
+
+<div class="card">
+  <h2>SPADIE</h2>
+  <p class="note">紺地にロゴと背景柄。差し色は黄・水色・ピンク。</p>
+  <div class="links">
+    <a class="b" href="pop.html?demo=8&brand=spadie&mode=all">横<span class="s">8品目</span></a>
+    <a class="b" href="pop.html?demo=20&brand=spadie&mode=all">横・スクロール<span class="s">20品目</span></a>
+    <a class="b" href="pop.html?demo=8&brand=spadie&mode=all&orient=v">縦<span class="s">90°回転</span></a>
+    <a class="b" href="pop.html?demo=8&brand=spadie&mode=all&orient=v2">縦・上下逆<span class="s">180°</span></a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>JOPT</h2>
+  <p class="note">白と #c86b30。フォントは端末の こぶりなゴシック Std。無い端末では Noto Sans JP を読む。</p>
+  <div class="links">
+    <a class="b" href="pop.html?demo=8&brand=jopt-w&mode=all">白・横<span class="s">jopt-w</span></a>
+    <a class="b" href="pop.html?demo=20&brand=jopt-w&mode=all">白・スクロール<span class="s">20品目</span></a>
+    <a class="b" href="pop.html?demo=8&brand=jopt-o&mode=all">#c86b30・横<span class="s">jopt-o</span></a>
+    <a class="b" href="pop.html?demo=8&brand=jopt-w&mode=all&orient=v">白・縦<span class="s">90°回転</span></a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>標準</h2>
+  <p class="note">SPADIE でも JOPT でもない大会のデザイン。</p>
+  <div class="links">
+    <a class="b" href="pop.html?demo=8&brand=std&mode=all">横<span class="s">8品目</span></a>
+    <a class="b" href="pop.html?demo=8&brand=std">販売中のみ<span class="s">mode 既定</span></a>
+    <a class="b" href="pop.html?demo=20&brand=std&mode=all">横・スクロール<span class="s">20品目</span></a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>見本データの中身</h2>
+  <p class="note">品目は5つおきに状態が変わる。時刻は 12:00 固定で作るので、深夜に開いても同じ見え方になる（ヘッダーの時計も 12:00 から進む）。</p>
+  <table>
+    <tr><th>状態</th><th>見え方</th></tr>
+    <tr><td>販売中</td><td>写真付き。価格と「販売中」</td></tr>
+    <tr><td>SOLD OUT</td><td>モノクロ＋帯</td></tr>
+    <tr><td>受取前</td><td>「○:○○から販売」（90分後）</td></tr>
+    <tr><td>期限切れ</td><td><code>mode=all</code> では SOLD OUT、既定では非表示</td></tr>
+  </table>
+  <p class="note" style="margin:12px 0 0">写真はその場で描いた色違いの矩形。実物の写真は使っていない。</p>
+</div>
+
+<div class="card">
+  <h2>引数</h2>
+  <table>
+    <tr><th><code>demo</code></th><td>見本データで表示する。値は品目数（既定8、最大40）。付けると GAS に通信しない</td></tr>
+    <tr><th><code>brand</code></th><td><code>spadie</code> / <code>jopt-w</code> / <code>jopt-o</code> / <code>std</code></td></tr>
+    <tr><th><code>mode</code></th><td><code>all</code>＝全品目／省略＝販売中のみ</td></tr>
+    <tr><th><code>orient</code></th><td>省略＝横／<code>v</code>＝縦／<code>v2</code>＝縦・上下逆</td></tr>
+  </table>
+  <p class="note" style="margin:12px 0 0">本番の POP は管理画面の「POP設定」から URL を出す。このページは表示の確認だけに使う。</p>
+</div>
+</div>
+</body>
+</html>

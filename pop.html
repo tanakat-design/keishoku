@@ -128,6 +128,8 @@ const POLL = 30000;
 const TIMEOUT = 25000; // 1回の取得をあきらめるまでの時間。POLL より短くして要求が重ならないようにする
 const q = new URLSearchParams(location.search);
 const P = { tid: q.get('t') || '', mode: q.get('mode') === 'all' ? 'all' : 'now', date: q.get('date') || '', brand: (q.get('brand') || '').toLowerCase(), orient: ['v', 'v2'].includes(q.get('orient')) ? q.get('orient') : 'h' };
+// demo：GASを使わず内蔵の見本データで表示する（デザイン確認用）。値は品目数（既定8、最大40）
+P.demo = q.has('demo') ? Math.min(40, Math.max(1, parseInt(q.get('demo'), 10) || 8)) : 0;
 // ブランド別デザイン：URLの brand（jopt / spadie）を優先し、なければ大会名に SPADIE を含むかで決める
 // SPADIE：assets/LINE_ALBUM_SPADIE ロゴ_260908_2.png（支給されたロゴ画像そのもの）から、表示時にロゴ部分と背景柄の1区画を切り出して使う。画像は加工しない
 const JOPT_LOGO = { src: 'assets/' + encodeURIComponent('JOPTロゴ-02.png'), crop: { x: 187, y: 187, w: 687, h: 893 } }; // JOPTロゴ（支給画像）。加工せず切り出すだけ
@@ -138,11 +140,20 @@ const BRAND = {
 };
 // Webフォントは必要なときだけ、描画のあとに読む。標準デザインは端末のフォントだけで表示するため何も読まない
 // SPADIE は DotGothic16 が要る。JOPT は こぶりなゴシック Std が端末に無いときだけ Noto Sans JP を読む
+const JOPT_FALLBACK = 'family=Noto+Sans+JP:wght@300;400;600;900';
 function loadFont(b, cls) {
-  let fam = '';
-  if (b === 'spadie') fam = 'family=DotGothic16';
-  else if (cls === 'b-jopt' && !hasFont('JOPT Koburina')) fam = 'family=Noto+Sans+JP:wght@300;400;600;900';
-  if (!fam || S.font === fam) return;
+  if (b === 'spadie') return addFont('family=DotGothic16');
+  if (cls !== 'b-jopt' || S.fontChecked) return;
+  // こぶりなゴシック Std があるかは、描画が済んで @font-face の local() が解決するまで分からない。
+  // document.fonts.ready を待ってから1回だけ判定する（待たずに調べると必ず「無い」と出て、無駄に読んでしまう）
+  S.fontChecked = true;
+  let done = false;
+  const judge = () => { if (done) return; done = true; if (!hasFont('JOPT Koburina')) addFont(JOPT_FALLBACK); };
+  setTimeout(judge, 3000); // ready が解決しない端末でも必ず判定する
+  try { document.fonts.ready.then(judge, judge); } catch (e) { judge(); }
+}
+function addFont(fam) {
+  if (S.font === fam) return;
   S.font = fam;
   const l = document.createElement('link');
   l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?' + fam + '&display=swap';
@@ -280,7 +291,7 @@ function render() {
         <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
         <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
     }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
-    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button><button onclick="backToPick()">大会を変更</button></div>`;
+    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button>${P.demo ? '' : '<button onclick="backToPick()">大会を変更</button>'}</div>`;
   // 表示内容が前回と同じなら作り直さず時計だけ更新する（写真を含む画面全体の再構築とスクロールのやり直しを避ける）
   const key = html.replace(/<div class="clock">[^<]*<\/div>/, '') + '|' + innerWidth + 'x' + innerHeight + '|' + P.orient + '|' + !!B.logo;
   if (key === S.lastKey && app.querySelector('main')) { const c = app.querySelector('.clock'); if (c && c.textContent !== hm) c.textContent = hm; return; }
@@ -440,8 +451,45 @@ function start() {
 function backToPick() { reset(); P.tid = ''; pick(); }
 setInterval(() => { if (S.data && !document.hidden) render(); }, 20000); // 時計と、受取時刻・賞味期限の到来を反映（内容が変わったときだけ作り直す）
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.data) render(); }, 250); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.data) load(); });
-P.tid ? start() : pick();
+document.addEventListener('visibilitychange', () => { if (!P.demo && !document.hidden && S.data) load(); });
+/* --- テスト用（?demo=）：GASにも保存庫にも触らず、内蔵の見本データで表示する。本番と同じ描画コードを通すのでデザイン確認に使える --- */
+const DEMO_NAMES = ['からあげ弁当', 'おにぎり（鮭）', 'ミックスサンド', '焼きそばパン', 'メロンパン', '豚汁', 'クロワッサン', 'プリン', 'たこ焼き', 'お好み焼き', 'カレーパン', 'ツナマヨおにぎり', 'チョコデニッシュ', 'フルーツサンド', '肉まん', 'コーヒーゼリー', 'ハムサンド', 'あんぱん', 'みたらし団子', 'ポテトサラダ'];
+const DEMO_TITLE = { spadie: 'SPADIE Osaka 1st（表示テスト）', 'jopt-w': 'JOPT Osaka #01（表示テスト）', 'jopt-o': 'JOPT Osaka #01（表示テスト）' };
+function demoData(n) {
+  const date = bizDate();
+  const items = [], info = {};
+  for (let i = 0; i < n; i++) {
+    const base = DEMO_NAMES[i % DEMO_NAMES.length] + (i >= DEMO_NAMES.length ? ' ' + (1 + Math.floor(i / DEMO_NAMES.length)) : '');
+    const k = i % 5; // 0,1=販売中 / 2=SOLD OUT / 3=受取前 / 4=期限切れ
+    items.push({
+      base, store: 'テスト店',
+      // 時計は進むので、開いたまま置いても状態が変わらないよう前後を大きく離す（12:00 基準で11時間以上もつ）
+      recv: k === 3 ? '23:00' : '07:00',                            // 23:00＝受取前、07:00＝受取済み
+      exp: k === 4 ? date + ' 11:00' : addDay(date, 1) + ' 23:59',  // 11:00＝期限切れ、翌日23:59＝期限内
+      sold: k === 2
+    });
+    info[base] = { price: 200 + (i % 8) * 100, img: 1, v: 'demo' };
+  }
+  // 時刻は 12:00 固定。実時刻に合わせると、深夜や早朝に開いたとき全品目が「受取前」になって状態を確認できない
+  return { name: DEMO_TITLE[P.brand] || '表示テスト大会', date, now: date + ' 12:00', items, info };
+}
+function demoPhoto(base, i) { // 写真の代わり。色違いの矩形に頭文字を描くだけで、通信も素材も要らない
+  const c = document.createElement('canvas'); c.width = 400; c.height = 300;
+  const g = c.getContext('2d'), h = (i * 47) % 360;
+  g.fillStyle = 'hsl(' + h + ' 45% 82%)'; g.fillRect(0, 0, 400, 300);
+  g.fillStyle = 'hsl(' + h + ' 40% 42%)';
+  g.font = 'bold 150px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(Array.from(base)[0] || '', 200, 158);
+  return toBlobUrl(c.toDataURL('image/png'));
+}
+function demoStart() {
+  const d = demoData(P.demo);
+  d.items.forEach((it, i) => { S.imgs[it.base] = demoPhoto(it.base, i); S.imgV[it.base] = 'demo'; });
+  S.data = d; S.fetchedAt = Date.now(); // 時計は本番と同じ仕組みで進む
+  render();
+}
+
+P.demo ? demoStart() : P.tid ? start() : pick();
 </script>
 </body>
 </html>
