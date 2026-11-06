@@ -525,7 +525,7 @@ async function setActive(i, on) {
   catch (e) { toast(netMsg(e)); }
   render();
 }
-/* ===== デジタルPOP設定（写真・価格） ===== */
+/* ===== デジタルPOP設定（写真・ドリチケ枚数） ===== */
 const POP_BASE = 'https://tanakat-design.github.io/keishoku/pop.html';
 async function popT(i) {
   const t = S.admin.list[i];
@@ -547,13 +547,13 @@ function renderAdminPop() {
     <div class="seg">${[['h', '横'], ['v', '縦'], ['v2', '縦（上下逆）']].map(([o, l]) => `<button class="${p.orient === o ? 'on' : ''}" onclick="popOrient('${o}')">${l}</button>`).join('')}</div>
     <div class="small" style="margin-top:4px">縦置きのテレビが映像を回転できず横長のまま映す場合も、「縦」で画面を90°回して表示します。上下が逆になるときは「縦（上下逆）」を選びます。</div>
     ${urlRow('販売中の品目のみ（受取済み・賞味期限内）', 'now')}${urlRow('当日の全品目（受取前は「○:○○から販売」）', 'all')}</div>
-    <div class="card"><div style="font-weight:700">写真と価格</div>
-    <div class="small" style="margin-top:4px">品目名ごとに登録します。同じ品目名なら、他の大会でもそのまま使われます。写真は自動で縮小して保存します。</div>
+    <div class="card"><div style="font-weight:700">写真とドリチケ枚数</div>
+    <div class="small" style="margin-top:4px">品目名ごとに登録します。同じ品目名なら、他の大会でもそのまま使われます。写真は自動で縮小して保存します。POPには「ドリチケ◯枚」と表示します。</div>
     ${p.list && p.list.length ? bulkHtml() : ''}
     ${p.list == null ? '<div class="empty">読み込み中…</div>' : p.list.length ? p.list.map((it, k) => `<div class="poprow">
       <div class="popimg">${it.img ? `<img src="${it.img}" alt="">` : '<span>写真なし</span>'}</div>
       <div class="popbody"><div style="font-weight:700">${esc(it.name)}</div>
-        <div class="popctl"><span>¥</span><input id="pp${k}" inputmode="numeric" value="${esc(it.price)}" placeholder="価格"><button class="btn-sub" ${p.busy ? 'disabled' : ''} onclick="popSavePrice(${k})">保存</button></div>
+        <div class="popctl"><span>ドリチケ</span><input id="pp${k}" inputmode="numeric" value="${esc(it.price)}" placeholder="枚数"><span>枚</span><button class="btn-sub" ${p.busy ? 'disabled' : ''} onclick="popSavePrice(${k})">保存</button></div>
         <div class="popctl"><label class="btn-sub filebtn">${it.img ? '写真を変更' : '写真を選ぶ'}<input type="file" accept="image/*" onchange="popPhoto(${k}, this)"></label>${it.img ? `<button class="btn-sub" ${p.busy ? 'disabled' : ''} onclick="popDelPhoto(${k})">写真を削除</button>` : ''}</div>
         ${p.busy === it.name ? '<div class="small">保存中…</div>' : ''}</div></div>`).join('') : '<div class="empty">この大会には品目がありません</div>'}</div>`;
 }
@@ -612,7 +612,7 @@ function bulkHtml() {
 async function popSave(k, img) {
   const it = S.pop.list[k];
   const el = document.getElementById('pp' + k), price = el ? el.value : it.price;
-  S.pop.list.forEach((x, i) => { const e = document.getElementById('pp' + i); if (e && i !== k) x.price = e.value; }); // 他の行の入力途中の価格を残す
+  S.pop.list.forEach((x, i) => { const e = document.getElementById('pp' + i); if (e && i !== k) x.price = e.value; }); // 他の行の入力途中の枚数を残す
   S.pop.busy = it.name; render();
   try { const r = await call('adminPopSave', S.admin.pin, it.name, price, img); S.pop.list[k] = { name: r.name, price: r.price, img: r.img }; toast('保存しました'); }
   catch (e) { toast(netMsg(e)); }

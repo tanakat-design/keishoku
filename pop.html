@@ -25,8 +25,8 @@ main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(-
 .ph .ini{font-size:calc(var(--tw)*.22);font-weight:700;color:#c3c8cf}
 .cap{padding:calc(var(--tw)*.035) calc(var(--tw)*.05) calc(var(--tw)*.04)}
 .nm{font-weight:700;font-size:calc(var(--tw)*.085);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.row{display:flex;justify-content:space-between;align-items:center;margin-top:calc(var(--tw)*.02);gap:6px}
-.pr{font-size:calc(var(--tw)*.08);font-weight:700;font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;align-items:center;margin-top:calc(var(--tw)*.02);gap:6px;flex-wrap:wrap}
+.pr{font-size:calc(var(--tw)*.07);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .st{font-size:calc(var(--tw)*.055);font-weight:700;border-radius:999px;padding:.15em .7em;white-space:nowrap}
 .st.on{background:#e6f4ea;color:var(--ok)}
 .st.soon{background:#fef3e2;color:var(--soon)}
@@ -64,7 +64,7 @@ body.b-spadie{background-color:#113465}
 .b-spadie .ph{background:#1b3d70}
 .b-spadie .ph .ini{color:#5f7fae;font-family:"DotGothic16",sans-serif}
 .b-spadie .nm{color:#fff}
-.b-spadie .pr{font-family:"DotGothic16",sans-serif;font-weight:400;color:var(--yel);font-size:calc(var(--tw)*.095)}
+.b-spadie .pr{font-family:"DotGothic16",sans-serif;font-weight:400;color:var(--yel);font-size:calc(var(--tw)*.08)}
 .b-spadie .st{font-family:"DotGothic16",sans-serif;font-weight:400;border-radius:.calc(var(--u)*4)}
 .b-spadie .st.on{background:var(--yel);color:var(--navy)}
 .b-spadie .st.soon{background:var(--blu);color:#fff}
@@ -286,7 +286,8 @@ function render() {
   const html = `<header><h1>${B.logo ? `<img class="logo" src="${B.logo}" alt="">` : ''}<span class="ttl"><span class="t">軽食メニュー</span><small>${esc(d.name)}</small></span></h1><div class="clock">${hm}</div></header>
     <main>${list.length ? `<div class="grid">${list.map(t => {
       const img = S.imgs[t.base];
-      const price = t.info.price !== '' && t.info.price != null ? '¥' + Number(t.info.price).toLocaleString('ja-JP') : '';
+      // 値段はドリンクチケットの枚数で示す（現金販売ではないため）。保存している数値はそのまま、見せ方だけを変えている
+      const price = t.info.price !== '' && t.info.price != null ? 'ドリチケ' + Number(t.info.price).toLocaleString('ja-JP') + '枚' : '';
       const badge = t.st === 'on' ? '<span class="st on">販売中</span>' : t.st === 'soon' ? `<span class="st soon">${esc(t.from)}から販売</span>` : '';
       return `<div class="tile ${t.st === 'sold' || t.st === 'ended' ? 'sold' : t.st}">
         <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
@@ -469,7 +470,7 @@ function demoData(n) {
       exp: k === 4 ? date + ' 11:00' : addDay(date, 1) + ' 23:59',  // 11:00＝期限切れ、翌日23:59＝期限内
       sold: k === 2
     });
-    info[base] = { price: 200 + (i % 8) * 100, img: 1, v: 'demo' };
+    info[base] = { price: 1 + (i % 3), img: 1, v: 'demo' }; // ドリチケ1〜3枚
   }
   // 時刻は 12:00 固定。実時刻に合わせると、深夜や早朝に開いたとき全品目が「受取前」になって状態を確認できない
   return { name: DEMO_TITLE[P.brand] || '表示テスト大会', date, now: date + ' 12:00', items, info };
