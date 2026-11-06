@@ -40,7 +40,8 @@ main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(-
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*4);color:var(--sub);text-align:center;line-height:1.6}
 .ctl{position:fixed;right:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);display:flex;gap:8px;opacity:0;transition:opacity .3s}
 body:hover .ctl,.ctl:focus-within{opacity:1}
-.ctl button,.ctl select{font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);cursor:pointer}
+.ctl button,.ctl select,.ctl label{font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);cursor:pointer}
+.ctl label input{display:none}
 .offline{position:fixed;left:calc(var(--w)*1.2);bottom:calc(var(--u)*1.2);font-size:13px;color:#b3261e;background:#fdecea;border-radius:6px;padding:4px 10px;display:none}
 .pick{max-width:560px;margin:calc(var(--u)*10) auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
 .pick h2{margin:0 0 16px;font-size:22px}
@@ -176,7 +177,7 @@ function brandOf(name) {
   if (/jopt/i.test(name || '') && /osaka/i.test(name || '')) return 'jopt-w';
   return 'std';
 }
-const S = { data: null, imgs: {}, imgV: {}, tick: null, gen: 0 }; // gen：大会を切り替えた回数。古い取得の結果を捨てるために使う
+const S = { data: null, imgs: {}, imgV: {}, tick: null, gen: 0, photoSeq: 0 }; // gen：大会を切り替えた回数、photoSeq：テスト表示で写真を操作した回数。どちらも古い結果を捨てるために使う
 const app = document.getElementById('app');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -291,7 +292,7 @@ function render() {
         <div class="ph">${img ? `<img src="${img}" alt="">` : `<span class="ini">${esc(Array.from(t.base)[0] || '')}</span>`}${t.st === 'sold' || t.st === 'ended' ? '<div class="band">SOLD OUT</div>' : ''}</div>
         <div class="cap"><div class="nm">${esc(t.base)}</div><div class="row"><span class="pr">${price}</span>${badge}</div></div></div>`;
     }).join('')}</div>` : `<div class="empty">${P.mode === 'now' ? '現在販売中の軽食はありません' : '本日の軽食はありません'}</div>`}</main>
-    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button>${P.demo ? '' : '<button onclick="backToPick()">大会を変更</button>'}</div>`;
+    <div class="ctl"><button onclick="toggleMode()">${P.mode === 'now' ? '表示：販売中のみ → 全品目に切替' : '表示：全品目 → 販売中のみに切替'}</button><button onclick="toggleOrient()">向き：${({ h: '横', v: '縦', v2: '縦（上下逆）' })[P.orient]} → 切替</button><button onclick="fs()">全画面</button>${P.demo ? '<label>写真を選ぶ<input type="file" accept="image/*" multiple onchange="demoPick(this)"></label><button onclick="demoClear()">見本の絵に戻す</button>' : '<button onclick="backToPick()">大会を変更</button>'}</div>`;
   // 表示内容が前回と同じなら作り直さず時計だけ更新する（写真を含む画面全体の再構築とスクロールのやり直しを避ける）
   const key = html.replace(/<div class="clock">[^<]*<\/div>/, '') + '|' + innerWidth + 'x' + innerHeight + '|' + P.orient + '|' + !!B.logo;
   if (key === S.lastKey && app.querySelector('main')) { const c = app.querySelector('.clock'); if (c && c.textContent !== hm) c.textContent = hm; return; }
@@ -482,11 +483,57 @@ function demoPhoto(base, i) { // 写真の代わり。色違いの矩形に頭�
   g.fillText(Array.from(base)[0] || '', 200, 158);
   return toBlobUrl(c.toDataURL('image/png'));
 }
-function demoStart() {
-  const d = demoData(P.demo);
-  d.items.forEach((it, i) => { S.imgs[it.base] = demoPhoto(it.base, i); S.imgV[it.base] = 'demo'; });
-  S.data = d; S.fetchedAt = Date.now(); // 時計は本番と同じ仕組みで進む
+// 自分の写真を選んで確かめられるようにする。本番（index.html の shrinkImage）と同じ加工を通すので、
+// 4:3の切り抜きも圧縮後の画質も実際のPOPと同じになる。選んだ写真は保存庫に残り、ブランドや向きを変えても使い回せる
+function demoShrink(file) {
+  return new Promise((ok, ng) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const sw = img.naturalWidth, sh = img.naturalHeight, r = 4 / 3;
+      let cw = sw, ch = sw / r; if (ch > sh) { ch = sh; cw = sh * r; }
+      const sx = (sw - cw) / 2, sy = (sh - ch) / 2;
+      for (const w of [480, 400, 320]) {
+        const c = document.createElement('canvas'); c.width = w; c.height = Math.round(w / r);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(img, sx, sy, cw, ch, 0, 0, c.width, c.height);
+        for (const q of [0.8, 0.7, 0.6, 0.5]) { const d = c.toDataURL('image/jpeg', q); if (d.length < 48000) return ok(d); }
+      }
+      ng(new Error('小さくできない'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ng(new Error('読み込めない')); };
+    img.src = url;
+  });
+}
+// 写真の操作には通し番号を振る。加工や保存庫の読み出しを待つ間に次の操作が入ったら、古い結果は捨てる
+async function demoPick(input) {
+  const fs = Array.from(input.files || []); input.value = '';
+  if (!fs.length) return;
+  const seq = ++S.photoSeq;
+  const out = [];
+  for (const f of fs) { try { out.push(await demoShrink(f)); } catch (e) { /* 読めない写真は飛ばす */ } }
+  if (seq !== S.photoSeq || !out.length) return;
+  dbSet('state', 'demoImgs', out);
+  demoApply(out);
+}
+function demoClear() { S.photoSeq++; dbSet('state', 'demoImgs', null); demoApply(null); }
+function demoApply(list) { // list が無ければ見本の矩形に戻す。品目数より少なければ順に使い回す
+  S.data.items.forEach((it, i) => {
+    if (S.imgs[it.base]) URL.revokeObjectURL(S.imgs[it.base]);
+    S.imgs[it.base] = list && list.length ? toBlobUrl(list[i % list.length]) : demoPhoto(it.base, i);
+  });
+  S.lastKey = null; // 写真が変わったので作り直す
   render();
+}
+async function demoStart() {
+  const d = demoData(P.demo);
+  d.items.forEach(it => { S.imgV[it.base] = 'demo'; });
+  S.data = d; S.fetchedAt = Date.now(); // 時計は本番と同じ仕組みで進む
+  demoApply(null);                      // まず見本の絵で出す（保存庫を待たせない）
+  const seq = S.photoSeq;
+  const saved = await dbGet('state', 'demoImgs');
+  if (seq !== S.photoSeq) return;       // 待つ間に写真を選ばれた／消された
+  if (Array.isArray(saved) && saved.length) demoApply(saved);
 }
 
 P.demo ? demoStart() : P.tid ? start() : pick();
