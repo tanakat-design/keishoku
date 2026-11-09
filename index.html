@@ -396,7 +396,9 @@ function dueCount() { return S.day ? groupByReceipt(S.day.items).filter(g => exp
  * 出した記録のキーは 大会ID|開催日|店舗|受取時刻|賞味期限。賞味期限を直すとキーが変わるので出し直す。
  * 20分前を過ぎてから画面を開いた場合も、期限前なら1回出す。端末ごとに記録するので、複数の端末ではそれぞれ鳴る。 */
 const EXP_WARN_MIN = 20;
-function expNoted() { const o = LS.get('kExpNoted', {}); return o && typeof o === 'object' ? o : {}; }
+// localStorage が使えない端末でも、開いている間は出し直さないように記憶を持つ
+const expMem = {};
+function expNoted() { const o = LS.get('kExpNoted', {}); const base = o && typeof o === 'object' && !Array.isArray(o) ? o : {}; Object.keys(expMem).forEach(k => { base[k] = expMem[k]; }); return base; }
 function pruneExpNoted(o) { const lim = Date.now() - 2 * 864e5; let ch = false; Object.keys(o).forEach(k => { if (!(o[k] > lim)) { delete o[k]; ch = true; } }); if (ch) LS.set('kExpNoted', o); return o; }
 function checkExpiry() {
   if (S.view !== 'main' || !S.day || !S.session || !S.date) return;
@@ -405,13 +407,13 @@ function checkExpiry() {
   let changed = false;
   groupByReceipt(S.day.items).forEach(g => {
     const d = parseExp(g.exp); if (!d) return;
-    const left = Math.round((d - Date.now()) / 60000);
-    if (left <= 0 || left > EXP_WARN_MIN) return;             // 期限切れ後と、まだ先のものは出さない
+    const ms = d - Date.now();
+    if (ms <= 0 || ms > EXP_WARN_MIN * 60000) return;          // 期限切れ後と、まだ先のものは出さない（残り1分未満も取りこぼさない）
     const live = g.list.filter(([it]) => !it.soldOut && !pend.has(it.name) && it.remain == null);
     if (!live.length) return;                                  // 在庫切れ・入力済みだけなら知らせない
     const key = S.session.tid + '|' + S.date + '|' + g.store + '|' + g.recv + '|' + g.exp;
     if (noted[key]) return;
-    noted[key] = Date.now(); changed = true;
+    noted[key] = expMem[key] = Date.now(); changed = true;
     const names = live.map(([it]) => baseName(it.name));
     const label = names.length === 1 ? names[0] : names.slice(0, 2).join('・') + ' ほか' + (names.length - 2) + '品目';
     alertBar('exp:' + key, label + ' が期限切れになります。', 'close');
@@ -510,10 +512,12 @@ function orderHtml() {
 }
 async function ordSet(id, state, reason) {
   const s = S.session;
+  const tid = s.tid, date = S.date;
   S.busy = true; render();
   try {
     const r = await call('setOrder', s.tid, s.pin, id, 0, state, s.staff, deviceId(), reason || '');
-    if (S.day) S.day.orders = r.orders;
+    // 通信中に大会や日付を切り替えていたら、その画面に前の一覧を入れない
+    if (S.day && S.session && S.session.tid === tid && S.date === date) S.day.orders = r.orders;
     toast(state === '配達中' ? 'あなたが担当になりました' : state + 'にしました');
   } catch (e) { toast(errMsg(e)); loadDay(true); }
   finally { S.busy = false; render(); }
@@ -535,14 +539,21 @@ function checkOrders() {
   const byId = [];
   fresh.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, names: [] }); g.names.push(o.name + (o.qty > 1 ? '×' + o.qty : '')); });
   byId.forEach(g => alertBar('ord:' + g.id, g.table + '番テーブルの' + g.seat + '番シートのプレイヤーに ' + g.names.join('、') + ' を持っていってください。', 'order', 'ord'));
-  // 対応済みになった注文の帯は消す
-  AL.list.filter(a => a.id.indexOf('ord:') === 0).forEach(a => {
-    const id = a.id.slice(4);
+  // 対応済みになった注文の帯は消す（再通知の帯も同じ注文IDで消す）
+  AL.list.filter(a => a.id.indexOf('ord:') === 0 || a.id.indexOf('again:') === 0).slice().forEach(a => {
+    const id = a.id.indexOf('ord:') === 0 ? a.id.slice(4) : a.id.split(':')[1];
     if (!os.some(o => o.id === id && o.state === '受付')) closeAlert(a.id);
   });
   // 3分以上ほったらかしの受付があれば、もう一度鳴らす
+  // 帯を閉じずに放置している場合もあるので、再通知は別のIDで出す（同じIDだと alertBar が何もしない）
   const old = os.filter(o => o.state === '受付' && o.at && minAgo(o.at) >= 3);
-  old.forEach(o => { const k = 'again:' + o.id + ':' + Math.floor(minAgo(o.at) / 3); if (!seen[k]) { seen[k] = 1; alertBar('ord:' + o.id, o.table + '番テーブルの' + o.seat + '番シートの注文がまだ未対応です。', 'order', 'ord'); } });
+  old.forEach(o => {
+    const r = Math.floor(minAgo(o.at) / 3), k = 'again:' + o.id + ':' + r;
+    if (seen[k]) return;
+    seen[k] = 1;
+    closeAlert('ord:' + o.id);
+    alertBar('again:' + o.id + ':' + r, o.table + '番テーブルの' + o.seat + '番シートの注文がまだ未対応です。', 'order', 'ord');
+  });
 }
 function minAgo(hm) {
   const m = String(hm || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return 0;
@@ -681,8 +692,10 @@ async function ordT(i) {
   S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', busy: false };
   S.view = 'adminOrd'; render();
   loadQrLib();
-  try { const r = await call('adminTables', S.admin.pin, t.id); S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; }
-  catch (e) { toast(netMsg(e)); S.ord.tables = []; }
+  // 待っている間に別の大会の注文設定を開いていたら、その画面に前の大会の内容を入れない
+  const cur = () => S.view === 'adminOrd' && S.ord && S.ord.id === t.id;
+  try { const r = await call('adminTables', S.admin.pin, t.id); if (!cur()) return; S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; }
+  catch (e) { if (!cur()) return; toast(netMsg(e)); S.ord.tables = []; }
   render();
 }
 function ordUrl(tb) { return ORDER_BASE + '?t=' + encodeURIComponent(S.ord.id) + '&tb=' + encodeURIComponent(tb.table) + '&k=' + encodeURIComponent(tb.token); }
@@ -731,28 +744,32 @@ function renderAdminOrd() {
       <div class="small" style="margin-top:4px">作り直すと、この卓の古いQRは使えなくなります。</div>
     </div>`).join('') : '<div class="card empty">卓が登録されていません</div>'}`;
 }
+/** 応答が返ったとき、まだ同じ大会の注文設定を開いているかを確かめる */
+function ordSame(id) { return S.view === 'adminOrd' && S.ord && S.ord.id === id; }
 async function ordOpen(open) {
-  const h = document.getElementById('ordH');
+  const h = document.getElementById('ordH'), id = S.ord.id;
   S.ord.busy = true; render();
-  try { const r = await call('adminOrderOpen', S.admin.pin, S.ord.id, !!open, h ? h.value.trim() : S.ord.hours); S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; toast('保存しました'); }
-  catch (e) { toast(errMsg(e)); }
-  finally { S.ord.busy = false; render(); }
+  try { const r = await call('adminOrderOpen', S.admin.pin, id, !!open, h ? h.value.trim() : S.ord.hours); if (!ordSame(id)) return; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; toast('保存しました'); }
+  catch (e) { if (ordSame(id)) toast(errMsg(e)); }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
 async function ordSave(table, seats, active) {
   const tb = table != null ? String(table) : (document.getElementById('ordT') || {}).value;
   const sv = seats != null ? seats : (document.getElementById('ordS') || {}).value;
   if (!String(tb || '').trim()) return toast('卓番号を入れてください');
+  const id = S.ord.id;
   S.ord.busy = true; render();
-  try { S.ord.tables = await call('adminSaveTable', S.admin.pin, S.ord.id, String(tb).trim(), Number(sv), active === false ? '無効' : '有効', ''); toast('保存しました'); }
-  catch (e) { toast(errMsg(e)); }
-  finally { S.ord.busy = false; render(); }
+  try { const r = await call('adminSaveTable', S.admin.pin, id, String(tb).trim(), Number(sv), active === false ? '無効' : '有効', ''); if (!ordSame(id)) return; S.ord.tables = r; toast('保存しました'); }
+  catch (e) { if (ordSame(id)) toast(errMsg(e)); }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
 async function ordReissue(table, seats) {
   if (!confirm(table + '番テーブルのQRを作り直します。古いQRは使えなくなります。よろしいですか？')) return;
+  const id = S.ord.id;
   S.ord.busy = true; render();
-  try { S.ord.tables = await call('adminSaveTable', S.admin.pin, S.ord.id, table, seats, '有効', 'new'); toast('作り直しました。QRを置き換えてください'); }
-  catch (e) { toast(errMsg(e)); }
-  finally { S.ord.busy = false; render(); }
+  try { const r = await call('adminSaveTable', S.admin.pin, id, table, seats, '有効', 'new'); if (!ordSame(id)) return; S.ord.tables = r; toast('作り直しました。QRを置き換えてください'); }
+  catch (e) { if (ordSame(id)) toast(errMsg(e)); }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
 
 /* ===== デジタルPOP設定（写真・ドリチケ枚数） ===== */

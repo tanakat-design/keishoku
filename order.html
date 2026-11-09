@@ -64,7 +64,7 @@ const QUEUE_MS = 300000; // 送信待ちの有効期限（5分）。これを過
 
 const q = new URLSearchParams(location.search);
 const P = { tid: q.get('t') || '', table: q.get('tb') || '', token: q.get('k') || '' };
-const S = { view: 'load', err: '', data: null, imgs: {}, seat: '', qty: {}, busy: false, order: null, tick: null, poll: null };
+const S = { view: 'load', err: '', data: null, imgs: {}, seat: '', qty: {}, busy: false, order: null, tick: null, poll: null, menu: [], gen: 0 };
 
 const app = document.getElementById('app');
 const bar = document.getElementById('bar');
@@ -119,12 +119,16 @@ async function load() {
   try {
     const d = await call('getOrderMenu', P.tid, P.table, P.token); // QRの正しさ・席数・受付状況もここで分かる
     S.data = d; S.err = '';
+    // 席数が変わった／保存値が壊れているときは選び直させる（存在しない席に注文して断られ続けるのを防ぐ）
+    const sn = Number(S.seat);
+    if (S.seat && !(sn >= 1 && sn <= d.seats && sn === Math.floor(sn))) S.seat = '';
     const need = Object.keys(d.info).filter(n => d.info[n].img && !S.imgs[n]);
     if (need.length) {
       const im = await call('getPopImages', need.slice(0, 30));
       Object.keys(im).forEach(n => { S.imgs[n] = im[n]; });
     }
-    S.view = 'menu';
+    // 注文結果や送信待ちの表示を、定期取得で閉じてしまわない
+    if (S.view === 'load' || S.view === 'error' || S.view === 'menu') S.view = 'menu';
   } catch (e) {
     S.err = netMsg(e);
     if (!S.data) S.view = 'error';
@@ -133,8 +137,10 @@ async function load() {
 }
 
 /* --- 注文の送信。送れなければ端末に置いて再送する（5分で失効） --- */
-function queue() { return LS.get('kOrderQ', []); }
+// 壊れた保存値でも落ちないように、必ず配列にそろえる
+function queue() { const v = LS.get('kOrderQ', []); return Array.isArray(v) ? v.filter(j => j && j.reqId) : []; }
 function setQueue(v) { LS.set('kOrderQ', v); }
+function canStore() { try { localStorage.setItem('kTest', '1'); localStorage.removeItem('kTest'); return true; } catch (e) { return false; } }
 async function submit() {
   const { n, tk } = totals();
   if (!n) return;
@@ -149,6 +155,7 @@ async function submit() {
     S.view = 'done'; startPoll();
   } catch (e) {
     if (e && (e.name === 'AbortError' || /Failed to fetch|NetworkError|Load failed/i.test(e.message || ''))) {
+      if (!canStore()) { toast('電波が届きません。もう一度お試しください'); return; }   // 保存できないのに「送信待ち」と言わない
       setQueue(queue().concat([job]));           // つながらなかっただけ。あとで送る
       S.qty = {}; S.view = 'queued';
       toast('送信待ちにしました');
@@ -156,33 +163,45 @@ async function submit() {
   } finally { S.busy = false; render(); }
 }
 async function flush() {
+  if (flush.busy) return;                       // 15秒ごとの再送と、再表示時の再送が重ならないように
   let qs = queue();
   if (!qs.length) return;
   const live = qs.filter(j => Date.now() - j.at < QUEUE_MS);
   if (live.length !== qs.length) { setQueue(live); toast('時間が経ったため、送れなかった注文を取り消しました'); render(); }
   if (!live.length) return;
   const j = live[0];
+  flush.busy = true;
+  const gen = S.gen;                            // 送っている間に取り消されたら、結果を使わない
   try {
     const r = await call('placeOrder', j.tid, j.table, j.token, j.seat, j.items, j.reqId);
     setQueue(queue().filter(x => x.reqId !== j.reqId));
-    S.order = { id: r.id, key: r.key, lines: r.lines };
-    LS.set('kLastOrder', { id: r.id, key: r.key, at: Date.now() });
-    S.view = 'done'; startPoll(); render();
+    // いま開いている卓・大会の注文でなければ画面には出さない（卓を移ったあとに前の卓の再送が通った場合）
+    if (gen === S.gen && j.tid === P.tid && j.table === P.table) {
+      S.order = { id: r.id, key: r.key, lines: r.lines };
+      LS.set('kLastOrder', { id: r.id, key: r.key, tid: j.tid, table: j.table, at: Date.now() });
+      S.view = 'done'; startPoll();
+    }
+    render();
   } catch (e) {
     if (!(e && (e.name === 'AbortError' || /Failed to fetch|NetworkError|Load failed/i.test(e.message || '')))) {
       setQueue(queue().filter(x => x.reqId !== j.reqId));   // サーバーに断られた。残しても通らない
       toast(e.message || 'エラー'); render();
     }
-  }
+  } finally { flush.busy = false; }
 }
-function cancelQueued() { setQueue([]); S.view = 'menu'; render(); toast('取り消しました'); }
+// 取り消したあとに再送の応答が返ってきても「注文できました」にしない
+function cancelQueued() { S.gen++; setQueue([]); S.view = 'menu'; render(); toast('取り消しました。送信中だった場合は届いていることがあります'); }
 
 /* --- 注文したあとの状態表示 --- */
 function startPoll() {
   clearInterval(S.poll);
   S.poll = setInterval(async () => {
     if (!S.order || document.hidden) return;
-    try { const r = await call('getOrder', S.order.id, S.order.key); S.order.lines = r.lines; render(); } catch (e) {}
+    const id = S.order.id;
+    try {
+      const r = await call('getOrder', id, S.order.key);
+      if (S.order && S.order.id === id && r.id === id) { S.order.lines = r.lines; render(); }  // 遅れて返った前の注文の結果を入れない
+    } catch (e) {}
   }, 10000);
 }
 const stateBadge = s => s === '受付' ? '<span class="badge recv">受付ました</span>'
@@ -237,15 +256,15 @@ function render() {
       <div class="seats">${Array.from({ length: seats }, (_, i) => `<button onclick="pickSeat(${i + 1})">${i + 1}</button>`).join('')}</div></div>`;
     bar.innerHTML = ''; return;
   }
-  const list = onSale();
+  const list = S.menu = onSale();   // ボタンからは品目名ではなく番号で指す（品目名を onclick に埋めると、名前に ' が入ったとき壊れる・実行される）
   const stale = S.err ? `<div class="notice warn">${esc(S.err)}　最新の在庫を確認できていません。注文する前に「更新」を押してください。</div>` : '';
   app.innerHTML = head + stale + (queue().length ? '<div class="notice warn">送信待ちの注文があります。</div>' : '') +
-    (list.length ? `<div class="card">${list.map(x => {
+    (list.length ? `<div class="card">${list.map((x, i) => {
       const c = S.qty[x.base] || 0, tk = ticketOf(x.info), img = S.imgs[x.base];
       return `<div class="it">
         <div class="ph">${img ? `<img src="${esc(img)}" alt="">` : esc(Array.from(x.base)[0] || '')}</div>
         <div class="nm">${esc(x.base)}${tk ? `<div class="tk">ドリチケ${tk}枚</div>` : ''}</div>
-        <div class="qty"><button onclick="bump('${esc(x.base)}',-1)" ${c ? '' : 'disabled'}>−</button><span>${c}</span><button onclick="bump('${esc(x.base)}',1)">＋</button></div>
+        <div class="qty"><button onclick="bump(${i},-1)" ${c ? '' : 'disabled'}>−</button><span>${c}</span><button onclick="bump(${i},1)">＋</button></div>
       </div>`;
     }).join('')}</div>` : '<div class="card empty">ただいま注文できる軽食がありません</div>') +
     `<button class="btn sub" onclick="load()">更新</button>`;
@@ -254,7 +273,9 @@ function render() {
   bar.innerHTML = `<div class="bar"><div class="in"><div class="sum">${n ? `${n}点　<b>ドリチケ${tk}枚</b>` : '品目を選んでください'}</div>
     <button class="btn" ${n && !S.busy && !S.err ? '' : 'disabled'} onclick="confirmSubmit()">注文する</button></div></div>`;
 }
-function bump(name, d) {
+function bump(i, d) {
+  const x = (S.menu || [])[i]; if (!x) return;
+  const name = x.base;
   const cur = S.qty[name] || 0;
   const next = Math.max(0, cur + d);
   const other = Object.keys(S.qty).reduce((a, k) => a + (k === name ? 0 : S.qty[k]), 0);
