@@ -648,12 +648,15 @@ function notifyPush_(kind, text) {
 /** 1分おきのトリガーから呼ぶ。未送信をまとめて送る */
 function sendPending() {
   const p = PropertiesService.getScriptProperties();
-  const kind = str_(p.getProperty('NOTIFY_KIND'));
-  if (!kind) return;
+  const base = str_(p.getProperty('NOTIFY_KIND'));
   const sh = sheet_(SH.NOTIFY);
   const all = rows_(SH.NOTIFY);
   all.forEach(function (r, i) {
     if (str_(r[3]) !== '未送信') return;
+    // 種別ごとに送り先を変えられる。例：NOTIFY_KIND=discord、NOTIFY_KIND_期限=line
+    // （LINEの無料枠は月200通なので、数の多い注文通知には足りない。期限通知だけなら収まる）
+    const kind = str_(p.getProperty('NOTIFY_KIND_' + str_(r[1]))) || base;
+    if (!kind) return;
     const tries = Number(r[6]) || 0;
     if (tries >= 5) { sh.getRange(i + 2, 4).setValue('失敗'); return; }
     const row = r.slice();

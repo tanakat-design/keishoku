@@ -74,15 +74,16 @@ const X = ctx.__x;
 /* ---- 下ごしらえ ---- */
 Object.keys(X.HEAD).forEach(n => { DB[n] = []; });
 const today = X.bizDate_();
+const tomo = X.addDay_(today, 1); // 期限は翌日にして、何時に流しても結果が変わらないようにする
 DB[X.SH.TOURN].push(['T1', 'テスト大会', '1234', '有効', new Date(), '受付中', '']);
 DB[X.SH.TABLE].push(['T1', '3', 9, 'tok1234567890ab', '有効', new Date()]);
 DB[X.SH.TABLE].push(['T1', '4', 9, 'tok4444444444aa', '無効', new Date()]);
 DB[X.SH.POP].push(['からあげ弁当', 2, '', new Date()]);
 DB[X.SH.POP].push(['おにぎり', 1, '', new Date()]);
 // 在庫設定：受取07:00、期限は今日の23:59
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 1, 'からあげ弁当', 20, 'テスト店', '07:00', today + ' 23:59', '店舗受け取り', '住所', '000']);
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 2, 'おにぎり', 10, 'テスト店', '07:00', today + ' 23:59', '店舗受け取り', '住所', '000']);
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 3, '夜食パン', 10, 'テスト店', '23:50', today + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 1, 'からあげ弁当', 20, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 2, 'おにぎり', 10, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 3, '夜食パン', 10, 'テスト店', '04:30', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) { if (cond) { pass++; console.log('  OK  ' + name); } else { fail++; console.log('  NG  ' + name + (extra ? ' … ' + extra : '')); } }
@@ -116,7 +117,7 @@ console.log('--- onSale_ ---');
 const t1 = { id: 'T1', name: 'テスト大会', active: true, orderOpen: true, orderHours: '' };
 const sale = X.onSale_(t1, today);
 ok('受取済みは注文できる', sale['からあげ弁当'] === true);
-ok('受取前（23:50）は注文できない', !sale['夜食パン'] || new Date().getHours() >= 23);
+ok('受取前（翌04:30）は注文できない', !sale['夜食パン']);
 
 console.log('--- placeOrder ---');
 throws('トークンが違う', () => X.placeOrder('T1', '3', 'wrong', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r1'), /QR/);
