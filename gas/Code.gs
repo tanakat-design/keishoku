@@ -280,7 +280,9 @@ function adminSave(pin, f) {
         stockRows.push([id, name, date, k + 1, n, s, str_(i.store), recv, exp, str_(i.method), str_(i.addr), str_(i.tel)]);
       });
     });
-    replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date()]]);
+    // 注文受付・受付時間は大会編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、大会一覧が消える
+    const prev = rows_(SH.TOURN).filter(function (r) { return str_(r[0]) === id; })[0] || [];
+    replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date(), str_(prev[5]), str_(prev[6])]]);
     replace_(SH.STOCK, function (r) { return str_(r[0]) === id; }, stockRows);
     try { tournSheet_(id, name); } catch (e) { console.warn('大会シートを作成できませんでした: ' + e); } // 失敗しても保存は有効
     return adminList(pin);
@@ -379,7 +381,9 @@ function adminPopSave(pin, name, price, img) {
 function bizDate_() { return Utilities.formatDate(new Date(new Date().getTime() - 5 * 3600000), TZ, 'yyyy-MM-dd'); }
 function addDay_(d, n) { const x = new Date(d + 'T00:00:00+09:00'); x.setUTCDate(x.getUTCDate() + n); return Utilities.formatDate(x, TZ, 'yyyy-MM-dd'); }
 /** 受取時刻の実際の日時。0〜4時台は開催日の翌日として扱う（画面側と同じ規則） */
-function recvAt_(date, hm) { if (!hm) return ''; const h = Number(String(hm).slice(0, 2)); return (h < 5 ? addDay_(date, 1) : date) + ' ' + hm; }
+/** 'H:MM' も 'HH:MM' も受ける。桁を揃えないと文字列比較が狂う（9:00 が 23:00 より後になる） */
+function hm2_(v) { const m = str_(v).match(/^(\d{1,2}):(\d{2})$/); return m && +m[1] < 24 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; }
+function recvAt_(date, hm) { const t = hm2_(hm); if (!t) return ''; return (Number(t.slice(0, 2)) < 5 ? addDay_(date, 1) : date) + ' ' + t; }
 function rnd_(n, chars) {
   const cs = chars || 'abcdefghjkmnpqrstuvwxyz23456789';
   let s = '';
@@ -410,10 +414,13 @@ function tables_(tid) {
 
 /** 受付時間（「11:00-23:00」形式。空なら時刻では絞らない）。終わりが始まりより小さいときは日をまたぐ */
 function inHours_(hours) {
-  const m = str_(hours).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).match(/^(\d{1,2}:\d{2})\s*[-~〜]\s*(\d{1,2}:\d{2})$/);
-  if (!m) return true;
+  const s = str_(hours).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+  if (!s) return true;                                   // 空欄は時刻で絞らない
+  const m = s.match(/^(\d{1,2}:\d{2})\s*[-~〜]\s*(\d{1,2}:\d{2})$/);
+  const a = m && hm2_(m[1]), b = m && hm2_(m[2]);
+  if (!a || !b) return false;                            // 書式が違うときは開けない（書き損じで開きっぱなしにしない）
   const now = Utilities.formatDate(new Date(), TZ, 'HH:mm');
-  return m[1] <= m[2] ? (now >= m[1] && now <= m[2]) : (now >= m[1] || now <= m[2]);
+  return a <= b ? (now >= a && now <= b) : (now >= a || now <= b);   // 桁を揃えてから比べる
 }
 
 function checkOrderOpen_(t) {
@@ -447,8 +454,9 @@ function rowToOrder_(r) {
     name: str_(r[7]), qty: Number(r[8]) || 0, ticket: str_(r[9]), state: str_(r[10]), reason: str_(r[11]),
     at: r[14] instanceof Date ? hm_(r[14]) : '', by: str_(r[15]), takenAt: r[17] instanceof Date ? hm_(r[17]) : '' };
 }
-function findOrderByReq_(reqId) {
-  const hit = orderRows_().filter(function (r) { return str_(r[13]) === reqId; });
+/** リクエストIDは大会の中でだけ探す（他の大会の注文を引き当てて照会キーを渡さないため） */
+function findOrderByReq_(tid, reqId) {
+  const hit = orderRows_().filter(function (r) { return str_(r[2]) === tid && str_(r[13]) === reqId; });
   if (!hit.length) return null;
   return { id: str_(hit[0][0]), key: str_(hit[0][12]), lines: hit.map(rowToOrder_) };
 }
@@ -466,7 +474,8 @@ function openOrders_(tid, date) {
 
 function limitCheck_(tid, date, table, seat) {
   const now = Date.now();
-  let seatLast = 0, tableCnt = 0, open = 0;
+  const tableIds = {};   // 卓の制限は「注文の数」で数える。明細の数で数えると5品目の1回で上限に達してしまう
+  let seatLast = 0, open = 0;
   orderRows_().forEach(function (r) {
     if (str_(r[2]) !== tid || ds_(r[4]) !== date) return;
     const s = str_(r[10]);
@@ -474,13 +483,23 @@ function limitCheck_(tid, date, table, seat) {
     if (!(r[14] instanceof Date)) return;
     const ms = r[14].getTime();
     if (str_(r[5]) === table) {
-      if (now - ms <= ORD.TABLE_SEC * 1000) tableCnt++;
+      if (now - ms <= ORD.TABLE_SEC * 1000) tableIds[str_(r[0])] = 1;
       if (str_(r[6]) === seat && ms > seatLast) seatLast = ms;
     }
   });
   if (open >= ORD.OPEN_MAX) throw new Error('注文が混み合っています。少し待ってからお願いします');
   if (seatLast && now - seatLast < ORD.SEAT_SEC * 1000) throw new Error('続けての注文は' + ORD.SEAT_SEC + '秒あけてください');
-  if (tableCnt >= ORD.TABLE_MAX) throw new Error('この卓からの注文が続いています。少し待ってからお願いします');
+  if (Object.keys(tableIds).length >= ORD.TABLE_MAX) throw new Error('この卓からの注文が続いています。少し待ってからお願いします');
+}
+/** 注文IDは重ならないものを選ぶ（同じ秒に乱数が重なると、別の注文が同じIDになる） */
+function newOrderId_() {
+  const used = {};
+  orderRows_().forEach(function (r) { used[str_(r[0])] = 1; });
+  for (let i = 0; i < 20; i++) {
+    const id = 'O' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + rnd_(5);
+    if (!used[id]) return id;
+  }
+  throw new Error('注文を記録できませんでした。もう一度お願いします');
 }
 
 /** 注文画面用。QRの正しさをここで確かめ、席数と受付状況も返す。PIN不要 */
@@ -500,39 +519,47 @@ function getOrderMenu(tid, table, token) {
 /** 注文を受け付ける。PIN不要 */
 function placeOrder(tid, table, token, seat, items, reqId) {
   tid = str_(tid); table = str_(table); token = str_(token); seat = str_(seat); reqId = str_(reqId);
-  if (!reqId) throw new Error('リクエストIDがありません');
+  if (!reqId || reqId.length > 40) throw new Error('リクエストIDがありません');
   if (table.length > 8 || seat.length > 8) throw new Error('卓・席の指定が正しくありません');
-  const dup = findOrderByReq_(reqId);
+
+  // QRの確認を先にやる。これより前に再送の判定を置くと、リクエストIDを言い当てるだけで
+  // トークン無しに他人の注文（照会キーを含む）を引き出せてしまう
+  const check = function () {
+    const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
+    if (!t) throw new Error('この大会は注文を受け付けていません');
+    const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
+    if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
+    const sn = Number(seat);
+    if (!(sn >= 1 && sn <= tb.seats && sn === Math.floor(sn))) throw new Error('席番号が正しくありません');
+    checkOrderOpen_(t);
+    return { t: t, seat: String(sn) };   // 席は正規化して持つ（"01" と "1" で間隔制限をすり抜けさせない）
+  };
+  check();
+  const dup = findOrderByReq_(tid, reqId);
   if (dup) return dup;                                   // 保存できたのに応答が消えた場合の再送
-
-  const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
-  if (!t) throw new Error('この大会は注文を受け付けていません');
-  const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
-  if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
-  const sn = Number(seat);
-  if (!(sn >= 1 && sn <= tb.seats && sn === Math.floor(sn))) throw new Error('席番号が正しくありません');
-  checkOrderOpen_(t);
-
-  const date = bizDate_();
   const list = normItems_(items);
-  const sale = onSale_(t, date);
-  list.forEach(function (x) { if (!sale[x.name]) throw new Error('「' + x.name + '」はただいま注文できません'); });
-  const price = popMaster_(false);
 
   return withLock_(function () {
-    const again = findOrderByReq_(reqId);
-    if (again) return again;                             // ロックを待っている間に入っていた
-    limitCheck_(tid, date, table, seat);
+    // ロックを待っている間に、受付停止・トークン再発行・在庫切れ・期限到来が起きていることがある。
+    // 保存の直前にもう一度ぜんぶ確かめる
+    const c = check();
+    const again = findOrderByReq_(tid, reqId);
+    if (again) return again;
+    const date = bizDate_();
+    const sale = onSale_(c.t, date);
+    list.forEach(function (x) { if (!sale[x.name]) throw new Error('「' + x.name + '」はただいま注文できません'); });
+    limitCheck_(tid, date, table, c.seat);
+    const price = popMaster_(false);
     const now = new Date();
-    const id = 'O' + Utilities.formatDate(now, TZ, 'yyMMddHHmmss') + rnd_(3, '0123456789');
+    const id = newOrderId_();
     const key = rnd_(12);
     const rows = list.map(function (x, i) {
-      return [id, i + 1, tid, t.name, date, table, seat, x.name, x.qty,
+      return [id, i + 1, tid, c.t.name, date, table, c.seat, x.name, x.qty,
         price[x.name] ? str_(price[x.name].price) : '', '受付', '', key, reqId, now, '', '', '', '', ''];
     });
     append_(SH.ORDER, rows);
     const label = list.map(function (x) { return x.name + (x.qty > 1 ? '×' + x.qty : ''); }).join('、');
-    notifyPush_('注文', table + '番テーブルの' + seat + '番シートのプレイヤーに ' + label + ' を持っていってください。');
+    notifyPush_('注文', table + '番テーブルの' + c.seat + '番シートのプレイヤーに ' + label + ' を持っていってください。');
     return { id: id, key: key, lines: rows.map(rowToOrder_) };
   });
 }
@@ -557,13 +584,16 @@ function setOrder(tid, pin, id, no, state, staff, device, reason) {
     const sh = sheet_(SH.ORDER);
     const all = orderRows_();
     const now = new Date();
-    let held = null, done = 0;
+    let held = null, done = 0, already = 0;
     all.forEach(function (r, i) {
       if (str_(r[0]) !== id || str_(r[2]) !== tid) return;
       if (n && Number(r[1]) !== n) return;
       const cur = str_(r[10]);
       if (cur === '完了' || cur === '取消') return;                 // 終わった明細は動かさない
-      if (state === '配達中' && cur === '配達中' && str_(r[16]) !== device) { held = str_(r[15]); return; }
+      if (state === '配達中' && cur === '配達中') {
+        if (str_(r[16]) !== device) { held = str_(r[15]); return; } // 先に押した人が担当
+        already++; return;                                          // 同じ端末からの再送。担当日時も通知もそのまま
+      }
       const line = Utilities.formatDate(now, TZ, 'HH:mm') + ' ' + state + ' ' + staff;
       const hist = str_(r[19]) ? str_(r[19]) + ' / ' + line : line;
       const row = r.slice();
@@ -576,6 +606,7 @@ function setOrder(tid, pin, id, no, state, staff, device, reason) {
       done++;
     });
     if (!done && held) throw new Error(held + 'が配達中です');
+    if (!done && already) return { id: id, orders: openOrders_(tid, bizDate_()) }; // 再送。何も変えずに成功を返す
     if (!done) throw new Error('変更できる注文がありません');
     if (state === '配達中') notifyPush_('担当', staff + 'が届けに行きます。');
     return { id: id, orders: openOrders_(tid, bizDate_()) };
@@ -650,23 +681,38 @@ function sendPending() {
   const p = PropertiesService.getScriptProperties();
   const base = str_(p.getProperty('NOTIFY_KIND'));
   const sh = sheet_(SH.NOTIFY);
-  const all = rows_(SH.NOTIFY);
-  all.forEach(function (r, i) {
-    if (str_(r[3]) !== '未送信') return;
-    // 種別ごとに送り先を変えられる。例：NOTIFY_KIND=discord、NOTIFY_KIND_期限=line
-    // （LINEの無料枠は月200通なので、数の多い注文通知には足りない。期限通知だけなら収まる）
-    const kind = str_(p.getProperty('NOTIFY_KIND_' + str_(r[1]))) || base;
-    if (!kind) return;
-    const tries = Number(r[6]) || 0;
-    if (tries >= 5) { sh.getRange(i + 2, 4).setValue('失敗'); return; }
-    const row = r.slice();
-    try {
-      sendOne_(kind, p, str_(r[2]));
-      row[3] = '送信済'; row[5] = new Date(); row[6] = tries + 1; row[7] = '';
-    } catch (e) {
-      row[3] = '未送信'; row[6] = tries + 1; row[7] = String(e && e.message ? e.message : e).slice(0, 200);
-    }
-    sh.getRange(i + 2, 1, 1, HEAD[SH.NOTIFY].length).setValues([row]);
+  // 1. ロックを取って送る分を「送信中」にする。こうしないと、1分おきのトリガーが重なったとき
+  //    同じ通知を2回送る。また、注文の書き込みと行がぶつからない
+  const jobs = withLock_(function () {
+    const all = rows_(SH.NOTIFY), out = [];
+    all.forEach(function (r, i) {
+      if (str_(r[3]) !== '未送信' || out.length >= 20) return;
+      // 種別ごとに送り先を変えられる。例：NOTIFY_KIND=discord、NOTIFY_KIND_期限=line
+      // （LINEの無料枠は月200通なので、数の多い注文通知には足りない。期限通知だけなら収まる）
+      const kind = str_(p.getProperty('NOTIFY_KIND_' + str_(r[1]))) || base;
+      if (!kind) return;
+      const tries = Number(r[6]) || 0;
+      if (tries >= 5) { sh.getRange(i + 2, 4).setValue('失敗'); return; }
+      sh.getRange(i + 2, 4).setValue('送信中');
+      out.push({ i: i, kind: kind, text: str_(r[2]), tries: tries, row: r.slice() });
+    });
+    return out;
+  });
+  // 2. 送信そのものはロックの外でやる。外部通信で詰まっても注文の受付が止まらない
+  jobs.forEach(function (j) {
+    try { sendOne_(j.kind, p, j.text); j.okFlag = true; }
+    catch (e) { j.okFlag = false; j.err = String(e && e.message ? e.message : e).slice(0, 200); }
+  });
+  // 3. 結果を書き戻す
+  withLock_(function () {
+    jobs.forEach(function (j) {
+      const row = j.row;
+      row[3] = j.okFlag ? '送信済' : '未送信';
+      row[5] = j.okFlag ? new Date() : '';
+      row[6] = j.tries + 1;
+      row[7] = j.okFlag ? '' : j.err;
+      sh.getRange(j.i + 2, 1, 1, HEAD[SH.NOTIFY].length).setValues([row]);
+    });
   });
 }
 
@@ -704,7 +750,8 @@ function post_(url, obj) {
 }
 
 /** 賞味期限の予告をスタッフの外部通知にも流す。15分おきのトリガーから呼ぶ */
-function notifyExpiry() {
+function notifyExpiry() { withLock_(notifyExpiry_); }   // 注文の書き込みと「通知待ち」の行がぶつからないように
+function notifyExpiry_() {
   const warn = 20, sent = PropertiesService.getScriptProperties();
   const noted = JSON.parse(sent.getProperty('EXP_NOTED') || '{}');
   const now = new Date(), nowS = Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm');

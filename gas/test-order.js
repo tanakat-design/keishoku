@@ -175,6 +175,45 @@ const after = X.tables_('T1')[0].token;
 ok('トークンが変わる', before !== after && after.length === 16);
 throws('古いQRは使えない', () => X.placeOrder('T1', '3', before, '7', [{ name: 'おにぎり', qty: 1 }], 'req-E'), /QR/);
 
+console.log('--- レビューで見つかった不具合の再発防止 ---');
+// 1) 受付時間の桁ぞろえと、書き損じで開きっぱなしにしないこと
+ok('9:00-23:00 を日またぎと誤判定しない', X.inHours_('00:00-23:59') === true && X.inHours_('9:00-9:01') === false);
+ok('書式が違えば開けない', X.inHours_('11時から23時') === false);
+ok('空欄なら開く', X.inHours_('') === true);
+// 2) 受取時刻の桁ぞろえ
+ok("'9:00' を当日の09:00として扱う", X.recvAt_('2026-11-09', '9:00') === '2026-11-09 09:00');
+ok("'1:00' を翌日として扱う", X.recvAt_('2026-11-09', '1:00') === '2026-11-10 01:00');
+// 3) 席の正規化（"01" で間隔制限をすり抜けない）
+DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
+X.placeOrder('T1', '3', X.tables_('T1')[0].token, '2', [{ name: 'おにぎり', qty: 1 }], 'rq1');
+throws('"02" でも同じ席として止まる', () => X.placeOrder('T1', '3', X.tables_('T1')[0].token, '02', [{ name: 'おにぎり', qty: 1 }], 'rq2'), /60秒/);
+ok('席は正規化して保存する', DB[X.SH.ORDER][0][6] === '2', DB[X.SH.ORDER][0][6]);
+// 4) 卓の制限は注文の数で数える（明細の数ではない）
+DB[X.SH.ORDER].length = 0;
+for (let i = 0; i < 4; i++) {
+  DB[X.SH.ORDER].push(['O' + i, 1, 'T1', 'テスト大会', today, '3', String(i + 1), 'おにぎり', 1, '1', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
+  DB[X.SH.ORDER].push(['O' + i, 2, 'T1', 'テスト大会', today, '3', String(i + 1), 'からあげ弁当', 1, '2', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
+}
+let okFive = true;
+try { X.placeOrder('T1', '3', X.tables_('T1')[0].token, '9', [{ name: 'おにぎり', qty: 1 }], 'rq5'); } catch (e) { okFive = false; }
+ok('明細8行でも注文4件なら5件目は通る', okFive);
+throws('注文5件目のあとは止まる', () => X.placeOrder('T1', '3', X.tables_('T1')[0].token, '8', [{ name: 'おにぎり', qty: 1 }], 'rq6'), /続いています/);
+// 5) リクエストIDは大会をまたいで引き当てない
+DB[X.SH.TOURN].push(['T2', '別の大会', '9999', '有効', new Date(), '受付中', '']);
+DB[X.SH.TABLE].push(['T2', '1', 9, 'tok2222222222bb', '有効', new Date()]);
+throws('他の大会のリクエストIDでは引き当てられない', () => X.placeOrder('T2', '1', 'wrongtoken', '1', [{ name: 'おにぎり', qty: 1 }], 'rq5'), /QR/);
+// 6) 同じ端末からの「届けに行く」の再送で、担当日時も通知も増えない
+DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
+const oz = X.placeOrder('T1', '3', X.tables_('T1')[0].token, '4', [{ name: 'おにぎり', qty: 1 }], 'rq7');
+X.setOrder('T1', '1234', oz.id, 0, '配達中', '田中', 'devA', '');
+const t1st = DB[X.SH.ORDER][0][17], n1 = DB[X.SH.NOTIFY].length;
+X.setOrder('T1', '1234', oz.id, 0, '配達中', '田中', 'devA', '');
+ok('再送しても担当日時が変わらない', DB[X.SH.ORDER][0][17] === t1st);
+ok('再送しても通知が増えない', DB[X.SH.NOTIFY].length === n1, DB[X.SH.NOTIFY].length + ' / ' + n1);
+// 7) 大会の保存で注文受付・受付時間を消さない（列数を HEAD に合わせる）
+const tRow = DB[X.SH.TOURN].find(r => r[0] === 'T1');
+ok('大会シートは7列のまま', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中', JSON.stringify(tRow));
+
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);
 process.exit(fail ? 1 : 0);
