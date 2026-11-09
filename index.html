@@ -780,9 +780,14 @@ function mdToIso(md, today) {
   return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
 }
 /* 時刻・日時の読み取り（CSVの「9:45」「15:00:00」「10/31 9:00」「2026/10/31 9:00」など） */
-function parseHM(v) { const m = String(v || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/); return m && +m[1] < 24 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : ''; }
+// 全角を半角に直す。スプレッドシートには「１７：００」「〈ＭＥＭＯ〉」のように全角で入っていることがある
+function toHalf(v) { return String(v == null ? '' : v).replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' '); }
+function parseHM(v) {
+  const m = toHalf(v).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  return m && +m[1] < 24 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : '';
+}
 function parseExpCell(v, date, recv, today) {
-  const t = String(v || '').trim().replace(/／/g, '/').replace(/：/g, ':');
+  const t = toHalf(v).trim();
   if (/^(当日|本日|その日)(中|いっぱい)?$/.test(t)) return date + 'T23:59';
   let m = t.match(/^(?:(\d{4})[\/-])?(\d{1,2})[\/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (m) {
@@ -802,6 +807,7 @@ function expAfter(date, recv, h) {
 function importKeishoku(text, today, split, expH) {
   const rows = parseTable(text);
   const isMd = s => /^\d{1,2}\/\d{1,2}$/.test(s || '');
+  const isMemoLabel = s => /メモ|memo|備考/i.test(toHalf(s)); // 〈MEMO〉〈ＭＥＭＯ〉列を受取枠として読まない
   const hi = rows.findIndex(r => r.some(isMd));
   if (hi < 0) throw new Error('日付の行（例：10/29）が見つかりません');
   const hdr = rows[hi], times = rows[hi + 1] || [];
@@ -819,7 +825,7 @@ function importKeishoku(text, today, split, expH) {
   for (let c = firstDate; c < width; c++) {
     if (isMd(hdr[c])) cur = hdr[c];
     const lb = String(times[c] || '').replace(/\s+/g, '');
-    if (cur && (isMd(hdr[c]) || lb)) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(lb), label: parseHM(lb) ? '' : lb });
+    if (cur && (isMd(hdr[c]) || (lb && !isMemoLabel(lb)))) slots.push({ col: c, date: mdToIso(cur, today), time: parseHM(lb), label: parseHM(lb) ? '' : lb });
   }
   const shortStore = s => s.replace(/[（(][^）)]*[）)]/g, '').trim() || s;
   const inParen = s => { const m = s.match(/[（(]([^）)]*)[）)]/); return m && !/新規/.test(m[1]) ? m[1] : shortStore(s); };
@@ -909,7 +915,8 @@ function importKeishoku(text, today, split, expH) {
   });
   const dates = Object.keys(days).sort();
   if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
-  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: split ? g.recv : '', exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, items: g.items })) }));
+  // 合算のときも受取時間を残す（その日の最も早い受取時刻）。空にすると受取タブもPOPの「○:○○から販売」も出せなくなる。賞味期限も同じく最も早いものを残している
+  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: g.recv, exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, items: g.items })) }));
   result.info = { expFromSheet, expFromHours, expBlank, expItem, recvAssumed, assumedStores: [...assumedStores], labelDef, bad };
   return result;
 }
