@@ -280,6 +280,7 @@ async function loadDay(quiet) {
   } finally { S.loading = false; }
   if (S.day) S.day.items.forEach(it => { if (it.soldOut) S.sel.delete(it.name); });
   checkExpiry();
+  checkOrders();
   render();
 }
 
@@ -287,7 +288,7 @@ async function loadDay(quiet) {
 function render() {
   if (S.view === 'loading') { hideBar(); app.innerHTML = '<div class="empty">読み込み中…</div>'; return; }
   if (S.view === 'error') { hideBar(); app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card"><div class="notice warn">${esc(S.error)}</div><button class="btn" onclick="init()">再読み込み</button></div>`; return; }
-  ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit, adminPop: renderAdminPop })[S.view]();
+  ({ login: renderLogin, main: renderMain, adminLogin: renderAdminLogin, adminList: renderAdminList, adminEdit: renderAdminEdit, adminPop: renderAdminPop, adminOrd: renderAdminOrd })[S.view]();
 }
 function hideBar() { bar.classList.add('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = ''; }
 function showBar(html) { barIn.innerHTML = html; bar.classList.remove('hidden'); const w = document.querySelector('.wrap'); if (w) w.style.paddingBottom = (bar.offsetHeight + 24) + 'px'; }
@@ -324,14 +325,15 @@ function renderMain() {
   let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}　<span style="color:${S.loadedAt && Date.now() - S.loadedAt.getTime() > 180000 ? 'var(--danger)' : 'var(--sub)'}">${esc(freshText())}</span></div></div><button class="link" onclick="logout()">切替</button></div>`;
   if (!s.days.length) { hideBar(); app.innerHTML = h + '<div class="card empty">開催日が設定されていません。管理者に連絡してください。</div>'; return; }
   h += '<div class="chips">' + s.days.map(d => `<button class="chip ${d === S.date ? 'on' : ''}" onclick="pickDate('${d}')">${md(d)}</button>`).join('') + '</div>';
-  h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button><button class="tab ${S.tab === 'recv' ? 'on' : ''}" onclick="pickTab('recv')">受取</button></div>`;
+  const nOpen = ((S.day && S.day.orders) || []).filter(o => o.state === '受付').length;
+  h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button><button class="tab ${S.tab === 'recv' ? 'on' : ''}" onclick="pickTab('recv')">受取</button><button class="tab ${S.tab === 'order' ? 'on' : ''}" onclick="pickTab('order')">注文${nOpen ? '（' + nOpen + '）' : ''}</button></div>`;
   const q = queue().filter(j => j.tid === s.tid).length;
   if (q) h += `<div class="notice warn">未送信が${q}件あります。通信が回復すると自動で送信します。</div>`;
   if (!S.day) {
     h += S.loading ? '<div class="card empty">読み込み中…</div>' : '<div class="card empty">データを取得できません。電波を確認して「更新」を押してください。<br><button class="link" onclick="loadDay()">更新</button></div>';
     hideBar(); app.innerHTML = h; return;
   }
-  h += S.tab === 'record' ? recordHtml() : S.tab === 'close' ? closeHtml() : recvHtml();
+  h += S.tab === 'record' ? recordHtml() : S.tab === 'close' ? closeHtml() : S.tab === 'order' ? orderHtml() : recvHtml();
   h += `<div class="small" style="text-align:center;margin-top:12px">${S.loadedAt ? '最終更新 ' + hhmm(S.loadedAt) : 'オフライン表示'}　<button class="link" onclick="loadDay()">更新</button></div>`;
   app.innerHTML = h;
   const has = S.day.items.length;
@@ -481,6 +483,74 @@ function methodLabel(m) {
   const note = t.replace(/^(店舗)?受け?取り?|^配達|^デリバリー/, '').trim();
   return { label: lab, note: lab === t ? '' : note };
 }
+/* --- 注文（卓上から届いたもの） --- */
+function deviceId() { let d = LS.get('kDevice', ''); if (!d) { d = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); LS.set('kDevice', d); } return d; }
+function orderHtml() {
+  const os = (S.day && S.day.orders) || [];
+  const open = S.day && S.day.orderOpen;
+  const head = `<div class="notice ${open ? 'info' : 'warn'}">${open ? '卓上からの注文を受け付けています。' : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>`;
+  if (!os.length) return head + '<div class="card empty">未対応の注文はありません</div>';
+  const byId = [];
+  os.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, at: o.at, lines: [] }); g.lines.push(o); });
+  const rank = g => g.lines.some(l => l.state === '受付') ? 0 : 1;
+  byId.sort((a, b) => rank(a) - rank(b) || (a.at < b.at ? 1 : -1));
+  return head + byId.map(g => {
+    const waiting = g.lines.some(l => l.state === '受付');
+    const by = (g.lines.filter(l => l.by)[0] || {}).by || '';
+    return `<div class="card" style="border-left:4px solid ${waiting ? 'var(--danger)' : 'var(--accent)'}">
+      <div style="font-weight:700;font-size:17px">${esc(g.table)}番テーブル ${esc(g.seat)}番シート</div>
+      <div class="small">受付 ${esc(g.at)}${by ? '　担当：' + esc(by) : ''}</div>
+      <div style="margin-top:8px">${g.lines.map(l => `<div>${esc(l.name)}${l.qty > 1 ? ' ×' + l.qty : ''}${l.ticket ? `<span class="small">（ドリチケ${esc(l.ticket)}枚）</span>` : ''}　<b>${esc(l.state)}</b></div>`).join('')}</div>
+      <div class="popctl" style="margin-top:10px">
+        ${waiting ? `<button class="btn-sub" ${S.busy ? 'disabled' : ''} onclick="ordGo('${esc(g.id)}')">届けに行く</button>` : ''}
+        <button class="btn-sub" ${S.busy ? 'disabled' : ''} onclick="ordDone('${esc(g.id)}')">完了</button>
+        <button class="btn-sub" ${S.busy ? 'disabled' : ''} onclick="ordCancel('${esc(g.id)}')">取消</button>
+      </div></div>`;
+  }).join('');
+}
+async function ordSet(id, state, reason) {
+  const s = S.session;
+  S.busy = true; render();
+  try {
+    const r = await call('setOrder', s.tid, s.pin, id, 0, state, s.staff, deviceId(), reason || '');
+    if (S.day) S.day.orders = r.orders;
+    toast(state === '配達中' ? 'あなたが担当になりました' : state + 'にしました');
+  } catch (e) { toast(errMsg(e)); loadDay(true); }
+  finally { S.busy = false; render(); }
+}
+// 応答を受け取るまで配達を始めない。回線が切れたら担当は未確定のまま
+function ordGo(id) { ordSet(id, '配達中'); }
+function ordDone(id) { ordSet(id, '完了'); }
+function ordCancel(id) {
+  const r = prompt('取消の理由を入れてください（品切れ／席に居ない／その他）', '品切れ');
+  if (r === null) return;
+  ordSet(id, '取消', r);
+}
+/** 新しい注文に気づくための差分。受付の明細が増えたら鳴らす */
+function checkOrders() {
+  const os = (S.day && S.day.orders) || [];
+  const seen = checkOrders.seen = checkOrders.seen || {};
+  const fresh = [];
+  os.forEach(o => { const k = o.id + '#' + o.no; if (o.state === '受付' && !seen[k]) { seen[k] = 1; fresh.push(o); } });
+  const byId = [];
+  fresh.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, names: [] }); g.names.push(o.name + (o.qty > 1 ? '×' + o.qty : '')); });
+  byId.forEach(g => alertBar('ord:' + g.id, g.table + '番テーブルの' + g.seat + '番シートのプレイヤーに ' + g.names.join('、') + ' を持っていってください。', 'order', 'ord'));
+  // 対応済みになった注文の帯は消す
+  AL.list.filter(a => a.id.indexOf('ord:') === 0).forEach(a => {
+    const id = a.id.slice(4);
+    if (!os.some(o => o.id === id && o.state === '受付')) closeAlert(a.id);
+  });
+  // 3分以上ほったらかしの受付があれば、もう一度鳴らす
+  const old = os.filter(o => o.state === '受付' && o.at && minAgo(o.at) >= 3);
+  old.forEach(o => { const k = 'again:' + o.id + ':' + Math.floor(minAgo(o.at) / 3); if (!seen[k]) { seen[k] = 1; alertBar('ord:' + o.id, o.table + '番テーブルの' + o.seat + '番シートの注文がまだ未対応です。', 'order', 'ord'); } });
+}
+function minAgo(hm) {
+  const m = String(hm || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return 0;
+  const now = new Date(), d = new Date(now); d.setHours(+m[1], +m[2], 0, 0);
+  if (d > now) d.setDate(d.getDate() - 1);
+  return Math.floor((now - d) / 60000);
+}
+
 function recvHtml() {
   const d = S.day;
   if (!d.items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
@@ -595,7 +665,7 @@ function renderAdminList() {
       <label class="sw"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="setActive(${i}, this.checked)"><span>${t.active ? '表示' : '非表示'}</span></label></div>
       <div class="small">スタッフPIN ${esc(t.staffPin)}</div>
       <div class="small" style="margin-top:6px">${t.days.map(d => md(d.date) + ' ' + d.items.length + '品目').join('　') || '開催日なし'}</div>
-      <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button><button class="btn-sub" onclick="popT(${i})">POP設定</button></div></div>`).join('')
+      <div class="btns"><button class="btn-sub" onclick="editT(${i})">編集</button><button class="btn-sub" onclick="copyT(${i})">複製して新規作成</button><button class="btn-sub" onclick="popT(${i})">POP設定</button><button class="btn-sub" onclick="ordT(${i})">注文設定</button></div></div>`).join('')
       : '<div class="card empty">大会が登録されていません</div>') + '</div>';
 }
 async function setActive(i, on) {
@@ -604,6 +674,87 @@ async function setActive(i, on) {
   catch (e) { toast(netMsg(e)); }
   render();
 }
+/* ===== 卓上注文の設定（卓・QR・受付の開閉） ===== */
+const ORDER_BASE = 'https://tanakat-design.github.io/keishoku/order.html';
+async function ordT(i) {
+  const t = S.admin.list[i];
+  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', busy: false };
+  S.view = 'adminOrd'; render();
+  loadQrLib();
+  try { const r = await call('adminTables', S.admin.pin, t.id); S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; }
+  catch (e) { toast(netMsg(e)); S.ord.tables = []; }
+  render();
+}
+function ordUrl(tb) { return ORDER_BASE + '?t=' + encodeURIComponent(S.ord.id) + '&tb=' + encodeURIComponent(tb.table) + '&k=' + encodeURIComponent(tb.token); }
+/** QRの画像を作る小さなライブラリを、この画面を開いたときだけ読む。読めなくてもURLは使える */
+function loadQrLib() {
+  if (window.qrcode || loadQrLib.t) return;
+  loadQrLib.t = true;
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+  s.onload = () => render();
+  s.onerror = () => { loadQrLib.failed = true; render(); };
+  document.head.appendChild(s);
+}
+function qrImg(url, size) {
+  if (!window.qrcode) return '';
+  try {
+    const q = qrcode(0, 'M'); q.addData(url); q.make();
+    return q.createImgTag(Math.max(2, Math.round((size || 160) / q.getModuleCount())), 8);
+  } catch (e) { return ''; }
+}
+function renderAdminOrd() {
+  hideBar();
+  const o = S.ord;
+  const tbs = o.tables || [];
+  app.innerHTML = `<div class="header"><h1>注文設定</h1><button class="link" onclick="S.view='adminList';render()">戻る</button></div>
+    <div class="card"><div style="font-weight:700">${esc(o.name)}</div>
+      <div class="small" style="margin-top:4px">卓ごとのQRコードをテーブルに置くと、プレイヤーが席から軽食を注文できます。注文はスタッフ画面の「注文」タブに出ます。注文は在庫を減らしません。品切れのときは取り消してください。</div>
+      <div class="popctl" style="margin-top:10px">
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open ? 'false' : 'true'})">${o.open ? '受付を停止する' : '受付を開始する'}</button>
+        <span class="small">いまは<b>${o.open ? '受付中' : '停止中'}</b></span>
+      </div>
+      <div class="popctl" style="margin-top:8px"><span class="small">受付時間</span><input id="ordH" value="${esc(o.hours)}" placeholder="例：11:00-23:00（空なら制限なし）" style="width:220px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open})">保存</button></div>
+    </div>
+    <div class="card"><div style="font-weight:700">卓を追加・変更</div>
+      <div class="popctl" style="margin-top:8px"><span class="small">卓番号</span><input id="ordT" style="width:90px" placeholder="3"><span class="small">席数</span><input id="ordS" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave()">追加・保存</button></div>
+      <div class="small" style="margin-top:6px">同じ卓番号を入れると席数を変えられます。トークンはそのままです。</div>
+    </div>
+    ${o.tables == null ? '<div class="card empty">読み込み中…</div>' : tbs.length ? tbs.map(tb => `<div class="card">
+      <div style="font-weight:700">${esc(tb.table)}番テーブル<span class="small">　${tb.seats}席　${tb.active ? '有効' : '無効'}</span></div>
+      ${qrImg(ordUrl(tb), 160) || (loadQrLib.failed ? '<div class="small" style="margin-top:6px">QRの画像を作れませんでした。下のURLからQRを作ってください。</div>' : '<div class="small" style="margin-top:6px">QRを作っています…</div>')}
+      <div class="popurl" style="margin-top:8px"><input readonly value="${esc(ordUrl(tb))}" onfocus="this.select()"><button class="btn-sub" onclick="copyText('${esc(ordUrl(tb))}')">コピー</button><a class="btn-sub" href="${esc(ordUrl(tb))}" target="_blank" rel="noopener">開く</a></div>
+      <div class="popctl" style="margin-top:8px">
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave('${esc(tb.table)}', ${tb.seats}, ${tb.active ? 'false' : 'true'})">${tb.active ? '無効にする' : '有効にする'}</button>
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordReissue('${esc(tb.table)}', ${tb.seats})">QRを作り直す</button>
+      </div>
+      <div class="small" style="margin-top:4px">作り直すと、この卓の古いQRは使えなくなります。</div>
+    </div>`).join('') : '<div class="card empty">卓が登録されていません</div>'}`;
+}
+async function ordOpen(open) {
+  const h = document.getElementById('ordH');
+  S.ord.busy = true; render();
+  try { const r = await call('adminOrderOpen', S.admin.pin, S.ord.id, !!open, h ? h.value.trim() : S.ord.hours); S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; toast('保存しました'); }
+  catch (e) { toast(errMsg(e)); }
+  finally { S.ord.busy = false; render(); }
+}
+async function ordSave(table, seats, active) {
+  const tb = table != null ? String(table) : (document.getElementById('ordT') || {}).value;
+  const sv = seats != null ? seats : (document.getElementById('ordS') || {}).value;
+  if (!String(tb || '').trim()) return toast('卓番号を入れてください');
+  S.ord.busy = true; render();
+  try { S.ord.tables = await call('adminSaveTable', S.admin.pin, S.ord.id, String(tb).trim(), Number(sv), active === false ? '無効' : '有効', ''); toast('保存しました'); }
+  catch (e) { toast(errMsg(e)); }
+  finally { S.ord.busy = false; render(); }
+}
+async function ordReissue(table, seats) {
+  if (!confirm(table + '番テーブルのQRを作り直します。古いQRは使えなくなります。よろしいですか？')) return;
+  S.ord.busy = true; render();
+  try { S.ord.tables = await call('adminSaveTable', S.admin.pin, S.ord.id, table, seats, '有効', 'new'); toast('作り直しました。QRを置き換えてください'); }
+  catch (e) { toast(errMsg(e)); }
+  finally { S.ord.busy = false; render(); }
+}
+
 /* ===== デジタルPOP設定（写真・ドリチケ枚数） ===== */
 const POP_BASE = 'https://tanakat-design.github.io/keishoku/pop.html';
 async function popT(i) {
@@ -1029,7 +1180,8 @@ function importSheet() {
 }
 
 /* ===== 自動更新（他スタッフの記録を反映） ===== */
-setInterval(() => { if (S.view === 'main' && S.tab === 'record' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
+// 注文は見落とせないので、どのタブを開いていても30秒ごとに取り直す
+setInterval(() => { if (S.view === 'main' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
 setInterval(() => { const a = document.activeElement; if (S.view === 'main' && !S.busy && !(a && a.tagName === 'INPUT')) render(); }, 60000);
 setInterval(checkExpiry, 30000); // 賞味期限の予告。画面を見ていなくても判定する
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'main') { flush(); loadDay(true); } });
