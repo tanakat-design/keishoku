@@ -10,17 +10,36 @@
 
 const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
 const TZ = 'Asia/Tokyo';
-const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定' };
+const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち' };
 const HEAD = {
-  [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時'],
+  [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間'],
   [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話'],
   [SH.LOG]: ['記録日時', '大会ID', '大会名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['大会ID', '大会名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
   [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。大会をまたいで使い回す
+  [SH.TABLE]: ['大会ID', '卓番号', '席数', 'トークン', '有効', '更新日時'], // 卓上注文のQR。トークンを作り直すと過去のQRが一斉に失効する
+  [SH.ORDER]: ['注文ID', '明細番号', '大会ID', '大会名', '開催日', '卓', '席', '品目', '個数', 'ドリチケ', '状態', '取消理由', '照会キー', 'リクエストID', '受付日時', '担当者', '担当端末', '担当日時', '完了日時', '操作履歴'],
+  [SH.NOTIFY]: ['通知ID', '種別', '本文', '状態', '作成日時', '送信日時', '試行回数', 'エラー'], // 外部通知はロックの外で、ここを経由して送る
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
-const TEXT_COLS = { [SH.TOURN]: [1, 3], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3] };
-const TIME_COLS = { [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10], [SH.POP]: [4] };
+const TEXT_COLS = {
+  [SH.TOURN]: [1, 3, 7], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
+  [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1],
+};
+const TIME_COLS = {
+  [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10], [SH.POP]: [4],
+  [SH.TABLE]: [6], [SH.ORDER]: [15, 18, 19], [SH.NOTIFY]: [5, 6],
+};
+/* 注文の設定（必要なら変える） */
+const ORD = {
+  MAX_QTY: 5,        // 1注文の合計個数
+  MAX_KINDS: 5,      // 1注文の品目の種類
+  SEAT_SEC: 60,      // 同じ卓×席の間隔（秒）
+  TABLE_MAX: 5,      // 1つの卓からの注文数
+  TABLE_SEC: 600,    // その集計期間（秒）
+  OPEN_MAX: 50,      // 未完了の注文がこれを超えたら新規受付を止める
+  LIST_MAX: 50,      // スタッフ画面に返す未完了注文の上限
+};
 
 /* ---------- Web アプリ ---------- */
 
@@ -36,6 +55,8 @@ const API = {
   markSoldOut: markSoldOut, cancelSoldOut: cancelSoldOut, submitClose: submitClose,
   adminList: adminList, adminSave: adminSave, adminSetActive: adminSetActive,
   getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
+  placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
+  adminTables: adminTables, adminSaveTable: adminSaveTable, adminOrderOpen: adminOrderOpen,
 };
 function doPost(e) {
   let out;
@@ -58,6 +79,7 @@ function onOpen() {
     .addItem('初期設定', 'setup')
     .addItem('管理者PINを表示', 'showAdminPin')
     .addItem('管理者PINを再発行', 'resetAdminPin')
+    .addItem('通知のトリガーを設定', 'setupTriggers')
     .addToUi();
 }
 
@@ -125,7 +147,11 @@ function staffLogin(tid, pin) {
 }
 
 function getDayState(tid, pin, date) {
-  return state_(staff_(tid, pin), date);
+  const t = staff_(tid, pin);
+  const st = state_(t, date);
+  st.orders = openOrders_(tid, date);   // 未完了の注文だけ。完了履歴は返さない（取得が重くならないように）
+  st.orderOpen = t.orderOpen;
+  return st;
 }
 
 /**
@@ -340,6 +366,368 @@ function adminPopSave(pin, name, price, img) {
 }
 
 /** 品目名から受取時間・店舗などの末尾の（ ）を外す */
+/* ---------- 卓上注文 ----------
+ * プレイヤーは PIN を持たないので placeOrder と getOrder は PIN 不要。そのぶん次で守る。
+ *   ・卓ごとのトークン（QRのURLに入れる。作り直せば過去のQRが一斉に失効する）
+ *   ・卓・席が「卓」シートに実在すること
+ *   ・大会が有効かつ「注文受付」が受付中、受付時間内であること
+ *   ・個数・種類・回数の制限
+ *   ・品目が本当に販売中かをサーバーで判定し直すこと（端末から来た値は信じない）
+ * 注文は在庫を減らさない。依頼として記録するだけで、在庫切れの記録とは分ける。
+ */
+
+function bizDate_() { return Utilities.formatDate(new Date(new Date().getTime() - 5 * 3600000), TZ, 'yyyy-MM-dd'); }
+function addDay_(d, n) { const x = new Date(d + 'T00:00:00+09:00'); x.setUTCDate(x.getUTCDate() + n); return Utilities.formatDate(x, TZ, 'yyyy-MM-dd'); }
+/** 受取時刻の実際の日時。0〜4時台は開催日の翌日として扱う（画面側と同じ規則） */
+function recvAt_(date, hm) { if (!hm) return ''; const h = Number(String(hm).slice(0, 2)); return (h < 5 ? addDay_(date, 1) : date) + ' ' + hm; }
+function rnd_(n, chars) {
+  const cs = chars || 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < n; i++) s += cs.charAt(Math.floor(Math.random() * cs.length));
+  return s;
+}
+
+/** いま注文できる品目（POPのまとめ名）。POPの「販売中」と同じ判定をサーバーでやり直す */
+function onSale_(t, date) {
+  const st = state_(t, date);
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const map = {};
+  st.items.forEach(function (it) {
+    if (it.soldOut) return;
+    const r = recvAt_(date, it.recv);
+    if (r && r > now) return;              // まだ受け取っていない
+    if (it.exp && !(now < it.exp)) return; // 賞味期限を過ぎた
+    map[popBase_(it.name)] = true;
+  });
+  return map;
+}
+
+function tables_(tid) {
+  return rows_(SH.TABLE).filter(function (r) { return str_(r[0]) === tid; }).map(function (r) {
+    return { table: str_(r[1]), seats: Number(r[2]) || 0, token: str_(r[3]), active: str_(r[4]) !== '無効' };
+  });
+}
+
+/** 受付時間（「11:00-23:00」形式。空なら時刻では絞らない）。終わりが始まりより小さいときは日をまたぐ */
+function inHours_(hours) {
+  const m = str_(hours).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).match(/^(\d{1,2}:\d{2})\s*[-~〜]\s*(\d{1,2}:\d{2})$/);
+  if (!m) return true;
+  const now = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+  return m[1] <= m[2] ? (now >= m[1] && now <= m[2]) : (now >= m[1] || now <= m[2]);
+}
+
+function checkOrderOpen_(t) {
+  if (!t.orderOpen) throw new Error('ただいま注文を受け付けていません');
+  if (!inHours_(t.orderHours)) throw new Error('注文の受付時間外です（' + t.orderHours + '）');
+}
+
+/** 端末から来た品目を検証してそろえる。同じ品目は合算する */
+function normItems_(items) {
+  if (!items || !items.length) throw new Error('品目が選ばれていません');
+  const map = {}, order = [];
+  items.forEach(function (x) {
+    const n = str_(x && x.name);
+    const q = Number(x && x.qty);
+    if (!n) throw new Error('品目名がありません');
+    if (n.length > 60) throw new Error('品目名が長すぎます');
+    if (!(q >= 1 && q <= ORD.MAX_QTY && q === Math.floor(q))) throw new Error('個数は1〜' + ORD.MAX_QTY + 'の整数で指定してください');
+    if (!map[n]) { map[n] = 0; order.push(n); }
+    map[n] += q;
+  });
+  if (order.length > ORD.MAX_KINDS) throw new Error('一度に選べるのは' + ORD.MAX_KINDS + '種類までです');
+  let total = 0;
+  const out = order.map(function (n) { total += map[n]; return { name: n, qty: map[n] }; });
+  if (total > ORD.MAX_QTY) throw new Error('一度に注文できるのは合計' + ORD.MAX_QTY + '個までです');
+  return out;
+}
+
+function orderRows_() { return rows_(SH.ORDER); }
+function rowToOrder_(r) {
+  return { id: str_(r[0]), no: Number(r[1]) || 0, tid: str_(r[2]), date: ds_(r[4]), table: str_(r[5]), seat: str_(r[6]),
+    name: str_(r[7]), qty: Number(r[8]) || 0, ticket: str_(r[9]), state: str_(r[10]), reason: str_(r[11]),
+    at: r[14] instanceof Date ? hm_(r[14]) : '', by: str_(r[15]), takenAt: r[17] instanceof Date ? hm_(r[17]) : '' };
+}
+function findOrderByReq_(reqId) {
+  const hit = orderRows_().filter(function (r) { return str_(r[13]) === reqId; });
+  if (!hit.length) return null;
+  return { id: str_(hit[0][0]), key: str_(hit[0][12]), lines: hit.map(rowToOrder_) };
+}
+/** 未完了（受付・配達中）の注文。新しい順に ORD.LIST_MAX 件まで */
+function openOrders_(tid, date) {
+  const out = [];
+  orderRows_().forEach(function (r) {
+    if (str_(r[2]) !== tid || ds_(r[4]) !== date) return;
+    const s = str_(r[10]);
+    if (s !== '受付' && s !== '配達中') return;
+    out.push(rowToOrder_(r));
+  });
+  return out.slice(-ORD.LIST_MAX);
+}
+
+function limitCheck_(tid, date, table, seat) {
+  const now = Date.now();
+  let seatLast = 0, tableCnt = 0, open = 0;
+  orderRows_().forEach(function (r) {
+    if (str_(r[2]) !== tid || ds_(r[4]) !== date) return;
+    const s = str_(r[10]);
+    if (s === '受付' || s === '配達中') open++;
+    if (!(r[14] instanceof Date)) return;
+    const ms = r[14].getTime();
+    if (str_(r[5]) === table) {
+      if (now - ms <= ORD.TABLE_SEC * 1000) tableCnt++;
+      if (str_(r[6]) === seat && ms > seatLast) seatLast = ms;
+    }
+  });
+  if (open >= ORD.OPEN_MAX) throw new Error('注文が混み合っています。少し待ってからお願いします');
+  if (seatLast && now - seatLast < ORD.SEAT_SEC * 1000) throw new Error('続けての注文は' + ORD.SEAT_SEC + '秒あけてください');
+  if (tableCnt >= ORD.TABLE_MAX) throw new Error('この卓からの注文が続いています。少し待ってからお願いします');
+}
+
+/** 注文を受け付ける。PIN不要 */
+function placeOrder(tid, table, token, seat, items, reqId) {
+  tid = str_(tid); table = str_(table); token = str_(token); seat = str_(seat); reqId = str_(reqId);
+  if (!reqId) throw new Error('リクエストIDがありません');
+  if (table.length > 8 || seat.length > 8) throw new Error('卓・席の指定が正しくありません');
+  const dup = findOrderByReq_(reqId);
+  if (dup) return dup;                                   // 保存できたのに応答が消えた場合の再送
+
+  const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
+  if (!t) throw new Error('この大会は注文を受け付けていません');
+  const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
+  if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
+  const sn = Number(seat);
+  if (!(sn >= 1 && sn <= tb.seats && sn === Math.floor(sn))) throw new Error('席番号が正しくありません');
+  checkOrderOpen_(t);
+
+  const date = bizDate_();
+  const list = normItems_(items);
+  const sale = onSale_(t, date);
+  list.forEach(function (x) { if (!sale[x.name]) throw new Error('「' + x.name + '」はただいま注文できません'); });
+  const price = popMaster_(false);
+
+  return withLock_(function () {
+    const again = findOrderByReq_(reqId);
+    if (again) return again;                             // ロックを待っている間に入っていた
+    limitCheck_(tid, date, table, seat);
+    const now = new Date();
+    const id = 'O' + Utilities.formatDate(now, TZ, 'yyMMddHHmmss') + rnd_(3, '0123456789');
+    const key = rnd_(12);
+    const rows = list.map(function (x, i) {
+      return [id, i + 1, tid, t.name, date, table, seat, x.name, x.qty,
+        price[x.name] ? str_(price[x.name].price) : '', '受付', '', key, reqId, now, '', '', '', '', ''];
+    });
+    append_(SH.ORDER, rows);
+    const label = list.map(function (x) { return x.name + (x.qty > 1 ? '×' + x.qty : ''); }).join('、');
+    notifyPush_('注文', table + '番テーブルの' + seat + '番シートのプレイヤーに ' + label + ' を持っていってください。');
+    return { id: id, key: key, lines: rows.map(rowToOrder_) };
+  });
+}
+
+/** プレイヤーが自分の注文の状態を見る。照会キーが合うものだけ返す。PIN不要 */
+function getOrder(id, key) {
+  id = str_(id); key = str_(key);
+  if (!id || !key) throw new Error('注文が指定されていません');
+  const hit = orderRows_().filter(function (r) { return str_(r[0]) === id && str_(r[12]) === key; });
+  if (!hit.length) throw new Error('注文が見つかりません');
+  return { id: id, lines: hit.map(rowToOrder_) };
+}
+
+/** スタッフが状態を変える。配達中 / 完了 / 取消。no を 0 にするとその注文の全明細 */
+function setOrder(tid, pin, id, no, state, staff, device, reason) {
+  const t = staff_(tid, pin);
+  id = str_(id); state = str_(state); staff = str_(staff); device = str_(device); reason = str_(reason);
+  if (['配達中', '完了', '取消'].indexOf(state) < 0) throw new Error('状態が正しくありません');
+  if (!staff) throw new Error('名前がありません');
+  const n = Number(no) || 0;
+  return withLock_(function () {
+    const sh = sheet_(SH.ORDER);
+    const all = orderRows_();
+    const now = new Date();
+    let held = null, done = 0;
+    all.forEach(function (r, i) {
+      if (str_(r[0]) !== id || str_(r[2]) !== tid) return;
+      if (n && Number(r[1]) !== n) return;
+      const cur = str_(r[10]);
+      if (cur === '完了' || cur === '取消') return;                 // 終わった明細は動かさない
+      if (state === '配達中' && cur === '配達中' && str_(r[16]) !== device) { held = str_(r[15]); return; }
+      const line = Utilities.formatDate(now, TZ, 'HH:mm') + ' ' + state + ' ' + staff;
+      const hist = str_(r[19]) ? str_(r[19]) + ' / ' + line : line;
+      const row = r.slice();
+      row[10] = state;
+      if (state === '取消') row[11] = reason;
+      if (state === '配達中') { row[15] = staff; row[16] = device; row[17] = now; }
+      if (state === '完了' || state === '取消') { row[18] = now; if (!str_(row[15])) { row[15] = staff; row[16] = device; } }
+      row[19] = hist;
+      sh.getRange(i + 2, 1, 1, HEAD[SH.ORDER].length).setValues([row]);
+      done++;
+    });
+    if (!done && held) throw new Error(held + 'が配達中です');
+    if (!done) throw new Error('変更できる注文がありません');
+    if (state === '配達中') notifyPush_('担当', staff + 'が届けに行きます。');
+    return { id: id, orders: openOrders_(tid, bizDate_()) };
+  });
+}
+
+/* ---------- 卓の管理（管理画面） ---------- */
+
+function adminTables(pin, tid) {
+  admin_(pin);
+  const t = tournaments_().filter(function (x) { return x.id === str_(tid); })[0];
+  if (!t) throw new Error('大会が見つかりません');
+  return { tables: tables_(str_(tid)), orderOpen: t.orderOpen, orderHours: t.orderHours };
+}
+
+/** 卓を追加・変更する。token を 'new' にするとトークンを作り直す（過去のQRが失効する） */
+function adminSaveTable(pin, tid, table, seats, active, token) {
+  admin_(pin);
+  tid = str_(tid); table = str_(table);
+  if (!table || table.length > 8) throw new Error('卓番号を8文字以内で入力してください');
+  const n = Number(seats);
+  if (!(n >= 1 && n <= 20 && n === Math.floor(n))) throw new Error('席数は1〜20の整数で入力してください');
+  return withLock_(function () {
+    const sh = sheet_(SH.TABLE);
+    const all = rows_(SH.TABLE);
+    let idx = -1;
+    all.forEach(function (r, i) { if (str_(r[0]) === tid && str_(r[1]) === table) idx = i; });
+    const old = idx >= 0 ? str_(all[idx][3]) : '';
+    const tk = (str_(token) === 'new' || !old) ? rnd_(16) : old;
+    const row = [tid, table, n, tk, str_(active) === '無効' ? '無効' : '有効', new Date()];
+    if (idx >= 0) sh.getRange(idx + 2, 1, 1, HEAD[SH.TABLE].length).setValues([row]);
+    else append_(SH.TABLE, [row]);
+    return tables_(tid);
+  });
+}
+
+/** 注文受付の開閉と受付時間。緊急停止はこれ */
+function adminOrderOpen(pin, tid, open, hours) {
+  admin_(pin);
+  tid = str_(tid);
+  return withLock_(function () {
+    const sh = sheet_(SH.TOURN);
+    const all = rows_(SH.TOURN);
+    let idx = -1;
+    all.forEach(function (r, i) { if (str_(r[0]) === tid) idx = i; });
+    if (idx < 0) throw new Error('大会が見つかりません');
+    const row = all[idx].slice();
+    row[5] = open ? '受付中' : '停止';
+    if (hours !== undefined && hours !== null) row[6] = str_(hours);
+    row[4] = new Date();
+    sh.getRange(idx + 2, 1, 1, HEAD[SH.TOURN].length).setValues([row]);
+    return { orderOpen: !!open, orderHours: str_(row[6]) };
+  });
+}
+
+/* ---------- 外部通知 ----------
+ * ロックの中で外部に通信すると全部の書き込みが詰まるので、「通知待ち」シートに積むだけにして、
+ * 1分おきの時間主導トリガー sendPending() が送る。失敗は試行回数を増やして次回に回す。
+ * 送り先はスクリプトプロパティで切り替える（トークンはコードに書かない）。
+ *   NOTIFY_KIND = discord | slack | line | mail | （空＝送らない）
+ *   DISCORD_WEBHOOK / SLACK_WEBHOOK / LINE_TOKEN + LINE_TO / NOTIFY_MAIL
+ */
+
+function notifyPush_(kind, text) {
+  try {
+    append_(SH.NOTIFY, [['N' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + rnd_(3, '0123456789'), kind, text, '未送信', new Date(), '', 0, '']]);
+  } catch (e) { /* 通知の失敗で注文を失わない */ }
+}
+
+/** 1分おきのトリガーから呼ぶ。未送信をまとめて送る */
+function sendPending() {
+  const p = PropertiesService.getScriptProperties();
+  const kind = str_(p.getProperty('NOTIFY_KIND'));
+  if (!kind) return;
+  const sh = sheet_(SH.NOTIFY);
+  const all = rows_(SH.NOTIFY);
+  all.forEach(function (r, i) {
+    if (str_(r[3]) !== '未送信') return;
+    const tries = Number(r[6]) || 0;
+    if (tries >= 5) { sh.getRange(i + 2, 4).setValue('失敗'); return; }
+    const row = r.slice();
+    try {
+      sendOne_(kind, p, str_(r[2]));
+      row[3] = '送信済'; row[5] = new Date(); row[6] = tries + 1; row[7] = '';
+    } catch (e) {
+      row[3] = '未送信'; row[6] = tries + 1; row[7] = String(e && e.message ? e.message : e).slice(0, 200);
+    }
+    sh.getRange(i + 2, 1, 1, HEAD[SH.NOTIFY].length).setValues([row]);
+  });
+}
+
+function sendOne_(kind, p, text) {
+  if (kind === 'discord') {
+    const url = str_(p.getProperty('DISCORD_WEBHOOK'));
+    if (!url) throw new Error('DISCORD_WEBHOOK が未設定です');
+    post_(url, { content: text });
+  } else if (kind === 'slack') {
+    const url = str_(p.getProperty('SLACK_WEBHOOK'));
+    if (!url) throw new Error('SLACK_WEBHOOK が未設定です');
+    post_(url, { text: text });
+  } else if (kind === 'line') {
+    const token = str_(p.getProperty('LINE_TOKEN')), to = str_(p.getProperty('LINE_TO'));
+    if (!token || !to) throw new Error('LINE_TOKEN / LINE_TO が未設定です');
+    const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: text }] }),
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() >= 300) throw new Error('LINE ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 120));
+  } else if (kind === 'mail') {
+    const to = str_(p.getProperty('NOTIFY_MAIL'));
+    if (!to) throw new Error('NOTIFY_MAIL が未設定です');
+    MailApp.sendEmail(to, '軽食アプリ', text);
+  } else {
+    throw new Error('NOTIFY_KIND が不明です：' + kind);
+  }
+}
+
+function post_(url, obj) {
+  const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(obj), muteHttpExceptions: true });
+  if (res.getResponseCode() >= 300) throw new Error(res.getResponseCode() + ' ' + res.getContentText().slice(0, 120));
+}
+
+/** 賞味期限の予告をスタッフの外部通知にも流す。15分おきのトリガーから呼ぶ */
+function notifyExpiry() {
+  const warn = 20, sent = PropertiesService.getScriptProperties();
+  const noted = JSON.parse(sent.getProperty('EXP_NOTED') || '{}');
+  const now = new Date(), nowS = Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm');
+  const lim = Utilities.formatDate(new Date(now.getTime() + warn * 60000), TZ, 'yyyy-MM-dd HH:mm');
+  let changed = false;
+  tournaments_().filter(function (t) { return t.active; }).forEach(function (t) {
+    const date = bizDate_();
+    const st = state_(t, date);
+    const byKey = {};
+    st.items.forEach(function (it) {
+      if (!it.exp || it.soldOut || it.remain != null) return;
+      if (!(it.exp > nowS && it.exp <= lim)) return;
+      const k = t.id + '|' + date + '|' + it.store + '|' + it.recv + '|' + it.exp;
+      (byKey[k] = byKey[k] || []).push(popBase_(it.name));
+    });
+    Object.keys(byKey).forEach(function (k) {
+      if (noted[k]) return;
+      noted[k] = now.getTime(); changed = true;
+      const ns = byKey[k];
+      const label = ns.length === 1 ? ns[0] : ns.slice(0, 2).join('・') + ' ほか' + (ns.length - 2) + '品目';
+      notifyPush_('期限', label + ' が期限切れになります。');
+    });
+  });
+  if (changed) {
+    const keep = {}, old = now.getTime() - 2 * 864e5;
+    Object.keys(noted).forEach(function (k) { if (noted[k] > old) keep[k] = noted[k]; });
+    sent.setProperty('EXP_NOTED', JSON.stringify(keep));
+  }
+}
+
+/** メニューから1回押せば、通知のトリガーを作る */
+function setupTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function (tg) {
+    if (['sendPending', 'notifyExpiry'].indexOf(tg.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(tg);
+  });
+  ScriptApp.newTrigger('sendPending').timeBased().everyMinutes(1).create();
+  ScriptApp.newTrigger('notifyExpiry').timeBased().everyMinutes(15).create();
+  try { SpreadsheetApp.getUi().alert('通知のトリガーを作りました（送信1分おき／期限の確認15分おき）'); } catch (e) {}
+}
+
 function popBase_(name) { return str_(name).replace(/(（[^）]*）)+$/, '').trim(); }
 
 function popMaster_(withImg) {
@@ -490,7 +878,9 @@ function state_(t, date) {
 
 function tournaments_() {
   return rows_(SH.TOURN).filter(function (r) { return str_(r[0]); }).map(function (r) {
-    return { id: str_(r[0]), name: str_(r[1]), staffPin: str_(r[2]), active: str_(r[3]) !== '無効' };
+    // 注文受付は空欄なら「停止」とみなす（PIN不要の入口なので、明示したときだけ開ける）
+    return { id: str_(r[0]), name: str_(r[1]), staffPin: str_(r[2]), active: str_(r[3]) !== '無効',
+      orderOpen: str_(r[5]) === '受付中', orderHours: str_(r[6]) };
   });
 }
 
