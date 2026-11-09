@@ -52,6 +52,13 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .notice.ok{background:var(--ok-weak)}
 #toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10;max-width:90%}
 #toast.show{opacity:1}
+/* 消えない通知の帯。音や振動が効かない端末でも、見れば分かるようにする */
+#alerts{position:fixed;left:0;right:0;top:0;z-index:20}
+#alerts .al{display:flex;align-items:flex-start;gap:10px;background:#b3261e;color:#fff;padding:12px 14px;font-size:15px;line-height:1.45;border-bottom:1px solid rgba(255,255,255,.3)}
+#alerts .al.ord{background:#1a73e8}
+#alerts .al .tx{flex:1;cursor:pointer}
+#alerts .al button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer;white-space:nowrap}
+body.has-al .wrap{padding-top:64px}
 .hidden{display:none!important}
 .irow{display:flex;gap:8px;margin-top:8px}
 .irow .iname{flex:1;min-width:0}
@@ -118,6 +125,7 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 <div class="wrap" id="app"></div>
 <div class="bar hidden" id="bar"><div class="in" id="barIn"></div></div>
 <div id="toast"></div>
+<div id="alerts"></div>
 <script>
 /* ===== 共通 ===== */
 const LS = {
@@ -133,6 +141,42 @@ const barIn = document.getElementById('barIn');
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2800); }
+
+/* ===== 通知（音・振動・消えない帯） =====
+ * ブラウザは操作なしに音を鳴らせないため、最初のタップで AudioContext を起こしておく。
+ * 消音・音量ゼロ・画面ロックは越えられないので、帯とタイトルの件数で目でも気づけるようにする。 */
+const AL = { ctx: null, list: [] };
+function wakeAudio() {
+  try { if (!AL.ctx) AL.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (AL.ctx.state === 'suspended') AL.ctx.resume(); } catch (e) {}
+}
+document.addEventListener('pointerdown', wakeAudio, { once: false, passive: true });
+function beep(times) {
+  wakeAudio();
+  const c = AL.ctx; if (!c || c.state !== 'running') return;
+  for (let i = 0; i < (times || 2); i++) {
+    const t0 = c.currentTime + i * 0.28, o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + 0.24);
+  }
+}
+function buzz() { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
+/** 帯を出す。同じ id は重ねない。tab を渡すとタップでそのタブへ移動する */
+function alertBar(id, text, tab, kind) {
+  if (AL.list.some(a => a.id === id)) return;
+  AL.list.push({ id, text, tab, kind: kind || '' });
+  beep(); buzz(); renderAlerts();
+}
+function closeAlert(id) { AL.list = AL.list.filter(a => a.id !== id); renderAlerts(); }
+function goAlert(id) { const a = AL.list.find(x => x.id === id); if (a && a.tab) pickTab(a.tab); closeAlert(id); }
+function renderAlerts() {
+  const box = document.getElementById('alerts');
+  box.innerHTML = AL.list.map(a => `<div class="al ${a.kind}"><div class="tx" onclick="goAlert('${esc(a.id)}')">${esc(a.text)}</div><button onclick="closeAlert('${esc(a.id)}')">閉じる</button></div>`).join('');
+  document.body.classList.toggle('has-al', AL.list.length > 0);
+  const base = '軽食 在庫管理';
+  document.title = AL.list.length ? '(' + AL.list.length + ') ' + base : base;
+}
 // Apps Script の公開URL（外部に置いた画面からはここへ送信する）
 const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
 async function call(fn, ...args) {
@@ -235,6 +279,7 @@ async function loadDay(quiet) {
     if (!quiet) toast(netMsg(e));
   } finally { S.loading = false; }
   if (S.day) S.day.items.forEach(it => { if (it.soldOut) S.sel.delete(it.name); });
+  checkExpiry();
   render();
 }
 
@@ -276,7 +321,7 @@ function logout() {
 /* --- メイン --- */
 function renderMain() {
   const s = S.session;
-  let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}</div></div><button class="link" onclick="logout()">切替</button></div>`;
+  let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}　<span style="color:${S.loadedAt && Date.now() - S.loadedAt.getTime() > 180000 ? 'var(--danger)' : 'var(--sub)'}">${esc(freshText())}</span></div></div><button class="link" onclick="logout()">切替</button></div>`;
   if (!s.days.length) { hideBar(); app.innerHTML = h + '<div class="card empty">開催日が設定されていません。管理者に連絡してください。</div>'; return; }
   h += '<div class="chips">' + s.days.map(d => `<button class="chip ${d === S.date ? 'on' : ''}" onclick="pickDate('${d}')">${md(d)}</button>`).join('') + '</div>';
   h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button><button class="tab ${S.tab === 'recv' ? 'on' : ''}" onclick="pickTab('recv')">受取</button></div>`;
@@ -343,6 +388,40 @@ function expStatus(g) {
   return { cls: left <= 60 ? 'soon' : 'wait', text: 'あと' + t };
 }
 function dueCount() { return S.day ? groupByReceipt(S.day.items).filter(g => expStatus(g).cls === 'due').length : 0; }
+
+/* --- 賞味期限の予告通知 ---
+ * 期限の EXP_WARN_MIN 分前になったら受取ごとに1回だけ知らせる。
+ * 出した記録のキーは 大会ID|開催日|店舗|受取時刻|賞味期限。賞味期限を直すとキーが変わるので出し直す。
+ * 20分前を過ぎてから画面を開いた場合も、期限前なら1回出す。端末ごとに記録するので、複数の端末ではそれぞれ鳴る。 */
+const EXP_WARN_MIN = 20;
+function expNoted() { const o = LS.get('kExpNoted', {}); return o && typeof o === 'object' ? o : {}; }
+function pruneExpNoted(o) { const lim = Date.now() - 2 * 864e5; let ch = false; Object.keys(o).forEach(k => { if (!(o[k] > lim)) { delete o[k]; ch = true; } }); if (ch) LS.set('kExpNoted', o); return o; }
+function checkExpiry() {
+  if (S.view !== 'main' || !S.day || !S.session || !S.date) return;
+  const noted = pruneExpNoted(expNoted());
+  const pend = pendingOut();
+  let changed = false;
+  groupByReceipt(S.day.items).forEach(g => {
+    const d = parseExp(g.exp); if (!d) return;
+    const left = Math.round((d - Date.now()) / 60000);
+    if (left <= 0 || left > EXP_WARN_MIN) return;             // 期限切れ後と、まだ先のものは出さない
+    const live = g.list.filter(([it]) => !it.soldOut && !pend.has(it.name) && it.remain == null);
+    if (!live.length) return;                                  // 在庫切れ・入力済みだけなら知らせない
+    const key = S.session.tid + '|' + S.date + '|' + g.store + '|' + g.recv + '|' + g.exp;
+    if (noted[key]) return;
+    noted[key] = Date.now(); changed = true;
+    const names = live.map(([it]) => baseName(it.name));
+    const label = names.length === 1 ? names[0] : names.slice(0, 2).join('・') + ' ほか' + (names.length - 2) + '品目';
+    alertBar('exp:' + key, label + ' が期限切れになります。', 'close');
+  });
+  if (changed) LS.set('kExpNoted', noted);
+}
+/** 最終取得からの経過。つながっていないことに気づけるように常に出す */
+function freshText() {
+  if (!S.loadedAt) return '未取得';
+  const m = Math.floor((Date.now() - S.loadedAt.getTime()) / 60000);
+  return m < 1 ? 'たった今更新' : m + '分前に更新';
+}
 
 /* --- 在庫切れ記録 --- */
 function recordHtml() {
@@ -952,6 +1031,7 @@ function importSheet() {
 /* ===== 自動更新（他スタッフの記録を反映） ===== */
 setInterval(() => { if (S.view === 'main' && S.tab === 'record' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
 setInterval(() => { const a = document.activeElement; if (S.view === 'main' && !S.busy && !(a && a.tagName === 'INPUT')) render(); }, 60000);
+setInterval(checkExpiry, 30000); // 賞味期限の予告。画面を見ていなくても判定する
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'main') { flush(); loadDay(true); } });
 
 init();
