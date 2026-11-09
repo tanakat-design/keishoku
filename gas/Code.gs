@@ -55,7 +55,7 @@ const API = {
   markSoldOut: markSoldOut, cancelSoldOut: cancelSoldOut, submitClose: submitClose,
   adminList: adminList, adminSave: adminSave, adminSetActive: adminSetActive,
   getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
-  placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
+  getOrderMenu: getOrderMenu, placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
   adminTables: adminTables, adminSaveTable: adminSaveTable, adminOrderOpen: adminOrderOpen,
 };
 function doPost(e) {
@@ -481,6 +481,20 @@ function limitCheck_(tid, date, table, seat) {
   if (open >= ORD.OPEN_MAX) throw new Error('注文が混み合っています。少し待ってからお願いします');
   if (seatLast && now - seatLast < ORD.SEAT_SEC * 1000) throw new Error('続けての注文は' + ORD.SEAT_SEC + '秒あけてください');
   if (tableCnt >= ORD.TABLE_MAX) throw new Error('この卓からの注文が続いています。少し待ってからお願いします');
+}
+
+/** 注文画面用。QRの正しさをここで確かめ、席数と受付状況も返す。PIN不要 */
+function getOrderMenu(tid, table, token) {
+  tid = str_(tid); table = str_(table); token = str_(token);
+  const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
+  if (!t) throw new Error('この大会は注文を受け付けていません');
+  const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
+  if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
+  const st = getPopState(tid, '');
+  st.seats = tb.seats;
+  st.open = !!(t.orderOpen && inHours_(t.orderHours));
+  st.hours = t.orderHours;
+  return st;
 }
 
 /** 注文を受け付ける。PIN不要 */
