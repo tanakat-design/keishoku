@@ -7,7 +7,9 @@
 <title>軽食メニュー</title>
 <!-- Google Fonts は head で読まない（描画が止まるため）。必要なブランドのときだけ loadFont() が後から読む -->
 <style>
-:root{--u:1vh;--w:1vw;--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000}
+:root{--u:1vh;--w:1vw;--bg:#f7f7f5;--card:#fff;--text:#1f2329;--sub:#6b7280;--line:#e5e7eb;--accent:#1a73e8;--ok:#1e7d3a;--soon:#b06000;
+  /* 品目名に使うサンセリフ。実在するゴシック体を名指しする。総称の sans-serif だけに頼ると、端末の既定が明朝のときに明朝で出てしまう */
+  --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Noto Sans JP","Meiryo","BIZ UDPGothic",sans-serif}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;overflow:hidden}
 #app{width:calc(var(--w)*100);height:calc(var(--u)*100);display:flex;flex-direction:column;position:fixed;left:0;top:0;transform-origin:0 0;overflow:hidden}
@@ -24,7 +26,7 @@ main{flex:1;min-height:0;position:relative;padding:calc(var(--u)*1.6) calc(var(-
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .ph .ini{font-size:calc(var(--tw)*.22);font-weight:700;color:#c3c8cf}
 .cap{padding:calc(var(--tw)*.035) calc(var(--tw)*.05) calc(var(--tw)*.04)}
-.nm{font-weight:700;font-size:calc(var(--tw)*.085);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nm{font-family:var(--sans);font-weight:700;font-size:calc(var(--tw)*.085);line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .row{display:flex;justify-content:space-between;align-items:center;margin-top:calc(var(--tw)*.02);gap:6px;flex-wrap:wrap}
 .pr{font-size:calc(var(--tw)*.07);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .st{font-size:calc(var(--tw)*.055);font-weight:700;border-radius:999px;padding:.15em .7em;white-space:nowrap}
@@ -91,7 +93,7 @@ body.b-spadie{background-color:#113465}
 .b-jopt .tile{background:#fff;border:1px solid var(--line);border-radius:calc(var(--u)*.5);box-shadow:0 calc(var(--u)*.3) calc(var(--u)*1.4) rgba(90,45,15,.08)}
 .b-jopt .ph{background:#f6f1ec}
 .b-jopt .ph .ini{color:#e3cdbd;font-weight:300}
-.b-jopt .nm{font-weight:400;color:var(--text);letter-spacing:.04em}
+.b-jopt .nm{font-family:"JOPT Koburina",var(--sans);font-weight:400;color:var(--text);letter-spacing:.04em} /* こぶりなゴシック Std もサンセリフ。無い端末では上のゴシックに落とす */
 .b-jopt .pr{font-weight:600;color:var(--acc);letter-spacing:.04em}
 .b-jopt .st{font-weight:600;border-radius:2px;letter-spacing:.12em}
 .b-jopt .st.on{background:var(--acc);color:#fff}
