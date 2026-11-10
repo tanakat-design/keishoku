@@ -197,6 +197,16 @@ function md(ds) { if (!ds) return ''; const [y, m, d] = ds.split('-').map(Number
 function hhmm(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function addDays(ds, n) { const [y, m, d] = ds.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
 function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+/** PINの入力を正す。全角数字（１２３）と空白が混ざっても通す。
+ * 入力欄は伏せ字なので、全角で打っていても本人は気づけない。サーバーは半角でしか一致しない */
+function normPin(v) { return toHalf(v).replace(/\s/g, ''); }
+/** PINを一時的に見えるようにする。打ち間違いを目で確かめられないと、原因が分からないまま詰む */
+function togglePin(id, btn) {
+  const el = document.getElementById(id); if (!el) return;
+  const show = el.type === 'password';
+  el.type = show ? 'text' : 'password';
+  btn.textContent = show ? '隠す' : '表示';
+}
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function dayKey(tid, date) { return 'kDay:' + tid + ':' + date; }
 
@@ -300,13 +310,13 @@ function renderLogin() {
   app.innerHTML = `<h1>軽食 在庫管理</h1><div class="card">
     ${S.tournaments.length ? '' : '<div class="notice warn">表示中の大会がありません。管理者メニューで大会を「表示」にしてください。</div>'}
     <label>大会</label><select id="lgT">${opts}</select>
-    <label>スタッフPIN</label><input id="lgP" type="password" inputmode="numeric" autocomplete="off">
+    <label>スタッフPIN <button type="button" class="link" style="font-size:13px" onclick="togglePin('lgP',this)">表示</button></label><input id="lgP" type="password" inputmode="numeric" autocomplete="off">
     <label>名前</label><input id="lgN" value="${esc(LS.get('kStaffName', ''))}" placeholder="例：佐藤">
     <button class="btn" style="margin-top:16px" onclick="doLogin()" ${S.tournaments.length ? '' : 'disabled'}>開始</button></div>
     <div style="text-align:center"><button class="link" onclick="openAdmin()">管理者メニュー</button></div>`;
 }
 async function doLogin() {
-  const tid = val('lgT'), pin = val('lgP').trim(), staff = val('lgN').trim();
+  const tid = val('lgT'), pin = normPin(val('lgP')), staff = val('lgN').trim();
   if (!pin) return toast('PINを入力してください');
   if (!staff) return toast('名前を入力してください');
   try { await login(tid, pin, staff); } catch (e) { toast(netMsg(e)); }
@@ -663,11 +673,11 @@ async function backToLogin() {
 function renderAdminLogin() {
   hideBar();
   app.innerHTML = `<div class="header"><h1>管理者メニュー</h1><button class="link" onclick="backToLogin()">戻る</button></div>
-    <div class="card"><label>管理者PIN</label><input id="adPin" type="password" inputmode="numeric" autocomplete="off">
+    <div class="card"><label>管理者PIN <button type="button" class="link" style="font-size:13px" onclick="togglePin('adPin',this)">表示</button></label><input id="adPin" type="password" inputmode="numeric" autocomplete="off">
     <button class="btn" style="margin-top:16px" onclick="adminLogin()">ログイン</button></div>`;
 }
 async function adminLogin() {
-  const pin = val('adPin').trim(); if (!pin) return toast('管理者PINを入力してください');
+  const pin = normPin(val('adPin')); if (!pin) return toast('管理者PINを入力してください');
   try { S.admin = { pin, list: await call('adminList', pin) }; S.view = 'adminList'; render(); } catch (e) { toast(netMsg(e)); }
 }
 function renderAdminList() {
