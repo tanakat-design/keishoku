@@ -60,7 +60,7 @@
   - `adminTables` / `adminSaveTable`（トークン再発行）／ `adminOrderOpen`（緊急停止・受付時間）
   - `getDayState` の戻りに `orders`（未完了の明細120件まで）と `orderOpen` / `orderOpenNow` / `orderHours` を足してある。`orderOpenNow` は「いま実際に届くか」で、受付中でも受付時間外なら false。画面はこれを出す（`adminTables` の `openNow` / `hoursOk` も同じ目的）
 - 注文は在庫を減らさない。依頼として「注文」シートに記録するだけで、在庫切れの記録とは分ける。受付であって提供の確約ではない。
-- 外部通知は `notifyPush_` が「通知待ち」シートに積み、1分おきの `sendPending()` がロックの外で送る。送り先はスクリプトプロパティ `NOTIFY_KIND`（discord / slack / line / mail）、`NOTIFY_KIND_<種別>` で種別ごとに上書きできる。LINEの無料枠は月200通なので注文通知には足りない。`notifyExpiry()` が15分おきに賞味期限20分前を拾う。
+- 外部通知は `notifyPush_` が「通知待ち」シートに積み、1分おきの `sendPending()` がロックの外で送る。送り先はスクリプトプロパティ `NOTIFY_KIND`（discord / slack / line / mail）、`NOTIFY_KIND_<種別>` で種別ごとに上書きできる。LINEの無料枠は月200通なので注文通知には足りない。`notifyExpiry()` が15分おきに賞味期限20分前を拾う。設定の確認用に、メニューの「通知をテスト送信」（`testNotify`）が「通知待ち」を通さずその場で送って結果を出す。
 - 書き込みはすべて `withLock_`（LockService）で排他する。
 - reqId で二重送信を防いでいる。
 
@@ -146,5 +146,5 @@
 - まず該当箇所のコードを読み、影響範囲を短く説明してから修正する。
 - 修正後のコードは、差分か、置き換えるファイル全体で示す。
 - 可能なら、Node等で関数単体のテスト（例：importKeishoku にテストCSVを入れて結果を表示する）を行う。
-- GAS を変えたら `node gas/test-order.js gas/Code.gs` を流す。GASのグローバルをスタブして注文まわりを103件検証する。GASを動かさずに壊れに気づける。
+- GAS を変えたら `node gas/test-order.js gas/Code.gs` を流す。GASのグローバルをスタブして注文まわりを106件検証する。GASを動かさずに壊れに気づける。
 - 画面を変えたら、ローカルで確かめる。`.claude/launch.json` の `keishoku`（`python -m http.server 8765`）を起動し、`window.fetch` を差し替えてAPIを模すと、GASに触らずに画面を動かせる。

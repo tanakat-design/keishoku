@@ -82,6 +82,7 @@ function onOpen() {
     .addItem('管理者PINを表示', 'showAdminPin')
     .addItem('管理者PINを再発行', 'resetAdminPin')
     .addItem('通知のトリガーを設定', 'setupTriggers')
+    .addItem('通知をテスト送信', 'testNotify')
     .addToUi();
 }
 
@@ -915,6 +916,28 @@ function notifyExpiry_() {
     Object.keys(noted).forEach(function (k) { if (noted[k] > old) keep[k] = noted[k]; });
     sent.setProperty('EXP_NOTED', JSON.stringify(keep));
   }
+}
+
+/**
+ * 送り先が正しいか、注文を入れずに確かめる。メニューから押す。
+ * 「通知待ち」シートには積まず、その場で送って結果をそのまま見せる。
+ * 設定の間違い（WebhookのURLの貼り間違い、プロパティ名の打ち間違い）がすぐ分かる
+ */
+function testNotify() {
+  const p = PropertiesService.getScriptProperties();
+  const kind = str_(p.getProperty('NOTIFY_KIND_注文')) || str_(p.getProperty('NOTIFY_KIND'));
+  let msg;
+  if (!kind) {
+    msg = 'NOTIFY_KIND が未設定です。\nプロジェクトの設定 → スクリプト プロパティ に\n  NOTIFY_KIND = discord\n  DISCORD_WEBHOOK = WebhookのURL\nを入れてから、もう一度押してください。';
+  } else {
+    try {
+      sendOne_(kind, p, '軽食アプリのテスト送信です。これが届けば通知の設定は正しい。');
+      msg = kind + ' に送りました。\n届いているか確かめてください。';
+    } catch (e) {
+      msg = kind + ' に送れませんでした。\n\n' + String(e && e.message ? e.message : e);
+    }
+  }
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { Logger.log(msg); }
 }
 
 /** メニューから1回押せば、通知のトリガーを作る */

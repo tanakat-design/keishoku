@@ -69,12 +69,12 @@ const MailApp = { sendEmail() {} };
 const ScriptApp = { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create() {} }) }) }) };
 const ContentService = { createTextOutput: t => ({ setMimeType: () => t }), MimeType: { JSON: 1 } };
 const HtmlService = {};
-const Logger = { log() {} };
+const Logger = { last: '', log(m) { Logger.last = String(m); } };
 
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -341,6 +341,22 @@ ok('取り残された通知は次の実行で送られる', (function () {
 
 // 8) ドリチケ枚数だけの読み出し（注文のロックの中で写真を全部読まない）
 ok('ドリチケ枚数だけ読める', (function () { const m = X.popPrices_(); return m['おにぎり'].price === 1 && m['おにぎり'].img === undefined; })());
+
+// 9) 送り先の設定をその場で確かめられる（注文を入れずに）
+ok('未設定なら NOTIFY_KIND を案内する', (function () {
+  delete PROPS.NOTIFY_KIND; Logger.last = ''; X.testNotify();
+  return /NOTIFY_KIND が未設定/.test(Logger.last);
+})(), Logger.last);
+ok('設定済みならその場で送る', (function () {
+  PROPS.NOTIFY_KIND = 'discord'; PROPS.DISCORD_WEBHOOK = 'https://example.invalid/hook';
+  Logger.last = ''; X.testNotify();
+  return /discord に送りました/.test(Logger.last);
+})(), Logger.last);
+ok('Webhookが未設定なら理由を出す', (function () {
+  PROPS.NOTIFY_KIND = 'discord'; delete PROPS.DISCORD_WEBHOOK;
+  Logger.last = ''; X.testNotify();
+  return /DISCORD_WEBHOOK が未設定/.test(Logger.last);
+})(), Logger.last);
 delete PROPS.NOTIFY_KIND; delete PROPS.DISCORD_WEBHOOK;
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
