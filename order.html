@@ -63,8 +63,9 @@ const TIMEOUT = 25000;   // 1回の通信をあきらめるまで。会場の回
 const QUEUE_MS = 300000; // 送信待ちの有効期限（5分）。これを過ぎた注文は送らない。席を立っている・期限切れの恐れがあるため
 
 const q = new URLSearchParams(location.search);
-const P = { tid: q.get('t') || '', table: q.get('tb') || '', token: q.get('k') || '' };
-const S = { view: 'load', err: '', data: null, imgs: {}, seat: '', qty: {}, busy: false, order: null, tick: null, poll: null, menu: [], gen: 0 };
+// QRは大会に1枚。卓と席はプレイヤーが選ぶ（卓ごとに刷り分けると印刷の手間が増えるため）
+const P = { tid: q.get('t') || '', token: q.get('k') || '' };
+const S = { view: 'load', err: '', data: null, imgs: {}, table: '', seat: '', qty: {}, busy: false, order: null, tick: null, poll: null, menu: [], gen: 0 };
 
 const app = document.getElementById('app');
 const bar = document.getElementById('bar');
@@ -88,9 +89,12 @@ async function call(fn, ...args) {
 }
 function netMsg(e) { return e && e.name === 'AbortError' ? '通信がとても遅いため中断しました' : (e && e.message) || '通信できませんでした'; }
 
-/* --- 席番号は「大会×卓」ごとに覚える。別の卓のQRを開いたら選び直しになる（誤配達を防ぐ） --- */
-const seatKey = () => 'kSeat:' + P.tid + ':' + P.table;
-function savedSeat() { return String(LS.get(seatKey(), '') || ''); }
+/* --- 卓と席は覚えておく。卓を変えたら席は選び直しになる（誤配達を防ぐ） --- */
+const tableKey = () => 'kTable:' + P.tid;
+const seatKey = () => 'kSeat:' + P.tid + ':' + S.table;
+function tableList() { return (S.data && S.data.tables) || []; }
+function seatsOf(tb) { const t = tableList().filter(x => x.table === String(tb))[0]; return t ? t.seats : 0; }
+function pickTable(n) { S.table = String(n); LS.set(tableKey(), S.table); S.seat = String(LS.get(seatKey(), '') || ''); render(); }
 function pickSeat(n) { S.seat = String(n); LS.set(seatKey(), S.seat); render(); }
 
 /* --- 販売中の品目（POPと同じ判定を画面側でもやる。最終判断はサーバー） --- */
@@ -117,11 +121,12 @@ function totals() {
 /* --- 読み込み --- */
 async function load() {
   try {
-    const d = await call('getOrderMenu', P.tid, P.table, P.token); // QRの正しさ・席数・受付状況もここで分かる
+    const d = await call('getOrderMenu', P.tid, P.token); // QRの正しさ・卓の一覧・受付状況もここで分かる
     S.data = d; S.err = '';
-    // 席数が変わった／保存値が壊れているときは選び直させる（存在しない席に注文して断られ続けるのを防ぐ）
+    // 卓が無くなった／席数が変わった／保存値が壊れているときは選び直させる
+    if (S.table && !(d.tables || []).some(x => x.table === S.table)) { S.table = ''; S.seat = ''; }
     const sn = Number(S.seat);
-    if (S.seat && !(sn >= 1 && sn <= d.seats && sn === Math.floor(sn))) S.seat = '';
+    if (S.seat && !(sn >= 1 && sn <= seatsOf(S.table) && sn === Math.floor(sn))) S.seat = '';
     const need = Object.keys(d.info).filter(n => d.info[n].img && !S.imgs[n]);
     if (need.length) {
       const im = await call('getPopImages', need.slice(0, 30));
@@ -144,12 +149,13 @@ function canStore() { try { localStorage.setItem('kTest', '1'); localStorage.rem
 async function submit() {
   const { n, tk } = totals();
   if (!n) return;
+  if (!S.table) return toast('テーブル番号を選んでください');
   if (!S.seat) return toast('席番号を選んでください');
   const items = Object.keys(S.qty).filter(k => S.qty[k] > 0).map(k => ({ name: k, qty: S.qty[k] }));
-  const job = { tid: P.tid, table: P.table, token: P.token, seat: S.seat, items, reqId: uid(), at: Date.now(), tk };
+  const job = { tid: P.tid, token: P.token, table: S.table, seat: S.seat, items, reqId: uid(), at: Date.now(), tk };
   S.busy = true; render();
   try {
-    const r = await call('placeOrder', job.tid, job.table, job.token, job.seat, job.items, job.reqId);
+    const r = await call('placeOrder', job.tid, job.token, job.table, job.seat, job.items, job.reqId);
     S.qty = {}; S.order = { id: r.id, key: r.key, lines: r.lines };
     LS.set('kLastOrder', { id: r.id, key: r.key, at: Date.now() });
     S.view = 'done'; startPoll();
@@ -173,10 +179,10 @@ async function flush() {
   flush.busy = true;
   const gen = S.gen;                            // 送っている間に取り消されたら、結果を使わない
   try {
-    const r = await call('placeOrder', j.tid, j.table, j.token, j.seat, j.items, j.reqId);
+    const r = await call('placeOrder', j.tid, j.token, j.table, j.seat, j.items, j.reqId);
     setQueue(queue().filter(x => x.reqId !== j.reqId));
-    // いま開いている卓・大会の注文でなければ画面には出さない（卓を移ったあとに前の卓の再送が通った場合）
-    if (gen === S.gen && j.tid === P.tid && j.table === P.table) {
+    // いま選んでいる卓・大会の注文でなければ画面には出さない（卓を移ったあとに前の卓の再送が通った場合）
+    if (gen === S.gen && j.tid === P.tid && j.table === S.table) {
       S.order = { id: r.id, key: r.key, lines: r.lines };
       LS.set('kLastOrder', { id: r.id, key: r.key, tid: j.tid, table: j.table, at: Date.now() });
       S.view = 'done'; startPoll();
@@ -216,13 +222,14 @@ function render() {
     app.innerHTML = `<div class="card"><div class="notice bad">${esc(S.err)}</div><button class="btn" onclick="load()">もう一度</button></div>`;
     bar.innerHTML = ''; return;
   }
-  if (!P.tid || !P.table || !P.token) {
+  if (!P.tid || !P.token) {
     app.innerHTML = '<div class="card"><div class="notice bad">このQRからは注文できません。卓のQRコードを読み取ってください。</div></div>';
     bar.innerHTML = ''; return;
   }
+  const where = S.table ? esc(S.table) + '番テーブル' + (S.seat ? ' ' + esc(S.seat) + '番シート' : '') : '';
   const head = `<div class="head"><div><h1>${esc(S.data ? S.data.name : '')}</h1>
-    <div class="seat">${esc(P.table)}番テーブル${S.seat ? ' ' + esc(S.seat) + '番シート' : ''}</div></div>
-    ${S.seat ? '<button class="link" onclick="S.seat=\'\';render()">席を変える</button>' : ''}</div>`;
+    ${where ? `<div class="seat">${where}</div>` : ''}</div>
+    ${S.table ? '<button class="link" onclick="S.table=\'\';S.seat=\'\';render()">席を変える</button>' : ''}</div>`;
 
   if (S.view === 'queued') {
     const n = queue().length;
@@ -249,11 +256,20 @@ function render() {
       <button class="btn sub" style="margin-top:12px" onclick="load()">更新</button></div>`;
     bar.innerHTML = ''; return;
   }
+  if (!S.table) {
+    const ts = tableList();
+    app.innerHTML = head + (ts.length ? `<div class="card"><div style="font-weight:700">何番テーブルですか？</div>
+      <div class="small">お届け先の確認に使います。</div>
+      <div class="seats">${ts.map(t => `<button onclick="pickTable('${esc(t.table)}')">${esc(t.table)}</button>`).join('')}</div></div>`
+      : '<div class="card empty">テーブルが登録されていません。スタッフにお知らせください。</div>');
+    bar.innerHTML = ''; return;
+  }
   if (!S.seat) {
-    const seats = (S.data && S.data.seats) || 10;
+    const seats = seatsOf(S.table) || 10;
     app.innerHTML = head + `<div class="card"><div style="font-weight:700">何番シートですか？</div>
       <div class="small">お届け先の確認に使います。</div>
-      <div class="seats">${Array.from({ length: seats }, (_, i) => `<button onclick="pickSeat(${i + 1})">${i + 1}</button>`).join('')}</div></div>`;
+      <div class="seats">${Array.from({ length: seats }, (_, i) => `<button onclick="pickSeat(${i + 1})">${i + 1}</button>`).join('')}</div>
+      <button class="btn sub" style="margin-top:12px" onclick="S.table='';render()">テーブルを選び直す</button></div>`;
     bar.innerHTML = ''; return;
   }
   const list = S.menu = onSale();   // ボタンからは品目名ではなく番号で指す（品目名を onclick に埋めると、名前に ' が入ったとき壊れる・実行される）
@@ -287,12 +303,13 @@ function bump(i, d) {
 function confirmSubmit() {
   const { n, tk } = totals();
   const lines = Object.keys(S.qty).filter(k => S.qty[k] > 0).map(k => '・' + k + ' ' + S.qty[k] + '個').join('\n');
-  if (!confirm(P.table + '番テーブル ' + S.seat + '番シート に、この内容でお届けします。\n\n' + lines + '\n\nドリチケ' + tk + '枚（お渡しのときにお預かりします）')) return;
+  if (!confirm(S.table + '番テーブル ' + S.seat + '番シート に、この内容でお届けします。\n\n' + lines + '\n\nドリチケ' + tk + '枚（お渡しのときにお預かりします）')) return;
   submit();
 }
 
 /* --- 起動 --- */
-S.seat = savedSeat();
+S.table = String(LS.get(tableKey(), '') || '');
+S.seat = S.table ? String(LS.get(seatKey(), '') || '') : '';
 load();
 setInterval(() => { if (!document.hidden) load(); }, 60000);  // 在庫の変化を拾う
 setInterval(flush, 15000);

@@ -689,16 +689,17 @@ async function setActive(i, on) {
 const ORDER_BASE = 'https://tanakat-design.github.io/keishoku/order.html';
 async function ordT(i) {
   const t = S.admin.list[i];
-  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', busy: false };
+  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', token: '', busy: false };
   S.view = 'adminOrd'; render();
   loadQrLib();
   // 待っている間に別の大会の注文設定を開いていたら、その画面に前の大会の内容を入れない
   const cur = () => S.view === 'adminOrd' && S.ord && S.ord.id === t.id;
-  try { const r = await call('adminTables', S.admin.pin, t.id); if (!cur()) return; S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; }
+  try { const r = await call('adminTables', S.admin.pin, t.id); if (!cur()) return; S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; }
   catch (e) { if (!cur()) return; toast(netMsg(e)); S.ord.tables = []; }
   render();
 }
-function ordUrl(tb) { return ORDER_BASE + '?t=' + encodeURIComponent(S.ord.id) + '&tb=' + encodeURIComponent(tb.table) + '&k=' + encodeURIComponent(tb.token); }
+// QRは大会に1枚。卓と席はプレイヤーが選ぶ
+function ordUrl() { return ORDER_BASE + '?t=' + encodeURIComponent(S.ord.id) + '&k=' + encodeURIComponent(S.ord.token); }
 /** QRの画像を作る小さなライブラリを、この画面を開いたときだけ読む。読めなくてもURLは使える */
 function loadQrLib() {
   if (window.qrcode || loadQrLib.t) return;
@@ -729,27 +730,31 @@ function renderAdminOrd() {
       </div>
       <div class="popctl" style="margin-top:8px"><span class="small">受付時間</span><input id="ordH" value="${esc(o.hours)}" placeholder="例：11:00-23:00（空なら制限なし）" style="width:220px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open})">保存</button></div>
     </div>
-    <div class="card"><div style="font-weight:700">卓を追加・変更</div>
-      <div class="popctl" style="margin-top:8px"><span class="small">卓番号</span><input id="ordT" style="width:90px" placeholder="3"><span class="small">席数</span><input id="ordS" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave()">追加・保存</button></div>
-      <div class="small" style="margin-top:6px">同じ卓番号を入れると席数を変えられます。トークンはそのままです。</div>
+    ${o.token ? `<div class="card"><div style="font-weight:700">注文用QR（この大会で1枚）</div>
+      <div class="small" style="margin-top:4px">全部のテーブルに同じものを置きます。プレイヤーが読み取ってからテーブル番号と席番号を選びます。</div>
+      ${qrImg(ordUrl(), 200) || (loadQrLib.failed ? '<div class="small" style="margin-top:6px">QRの画像を作れませんでした。下のURLからQRを作ってください。</div>' : '<div class="small" style="margin-top:6px">QRを作っています…</div>')}
+      <div class="popurl" style="margin-top:8px"><input readonly value="${esc(ordUrl())}" onfocus="this.select()"><button class="btn-sub" onclick="copyText('${esc(ordUrl())}')">コピー</button><a class="btn-sub" href="${esc(ordUrl())}" target="_blank" rel="noopener">開く</a></div>
+      <div class="popctl" style="margin-top:8px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordReissue()">QRを作り直す</button></div>
+      <div class="small" style="margin-top:4px">作り直すと、刷ってある古いQRが一斉に使えなくなります。印刷し直しが要ります。</div>
+    </div>` : '<div class="card"><div class="small">「受付を開始する」を押すとQRが出ます。</div></div>'}
+    <div class="card"><div style="font-weight:700">テーブルをまとめて作る</div>
+      <div class="popctl" style="margin-top:8px"><span class="small">テーブル数</span><input id="ordN" inputmode="numeric" style="width:70px" value="10"><span class="small">席数</span><input id="ordS2" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordMake()">作る</button></div>
+      <div class="small" style="margin-top:6px">1番から順に作ります。すでにあるテーブルは席数だけ合わせます。席数が違うテーブルは下で個別に直せます。</div>
     </div>
-    ${o.tables == null ? '<div class="card empty">読み込み中…</div>' : tbs.length ? tbs.map(tb => `<div class="card">
-      <div style="font-weight:700">${esc(tb.table)}番テーブル<span class="small">　${tb.seats}席　${tb.active ? '有効' : '無効'}</span></div>
-      ${qrImg(ordUrl(tb), 160) || (loadQrLib.failed ? '<div class="small" style="margin-top:6px">QRの画像を作れませんでした。下のURLからQRを作ってください。</div>' : '<div class="small" style="margin-top:6px">QRを作っています…</div>')}
-      <div class="popurl" style="margin-top:8px"><input readonly value="${esc(ordUrl(tb))}" onfocus="this.select()"><button class="btn-sub" onclick="copyText('${esc(ordUrl(tb))}')">コピー</button><a class="btn-sub" href="${esc(ordUrl(tb))}" target="_blank" rel="noopener">開く</a></div>
-      <div class="popctl" style="margin-top:8px">
-        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave('${esc(tb.table)}', ${tb.seats}, ${tb.active ? 'false' : 'true'})">${tb.active ? '無効にする' : '有効にする'}</button>
-        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordReissue('${esc(tb.table)}', ${tb.seats})">QRを作り直す</button>
-      </div>
-      <div class="small" style="margin-top:4px">作り直すと、この卓の古いQRは使えなくなります。</div>
-    </div>`).join('') : '<div class="card empty">卓が登録されていません</div>'}`;
+    <div class="card"><div style="font-weight:700">テーブルを個別に追加・変更</div>
+      <div class="popctl" style="margin-top:8px"><span class="small">テーブル番号</span><input id="ordT" style="width:90px" placeholder="3"><span class="small">席数</span><input id="ordS" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave()">追加・保存</button></div>
+    </div>
+    ${o.tables == null ? '<div class="card empty">読み込み中…</div>' : tbs.length ? `<div class="card"><div style="font-weight:700">登録済みのテーブル（${tbs.length}）</div>
+      ${tbs.map(tb => `<div class="popctl" style="margin-top:8px"><span style="flex:1">${esc(tb.table)}番　<span class="small">${tb.seats}席　${tb.active ? '有効' : '無効'}</span></span>
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave('${esc(tb.table)}', ${tb.seats}, ${tb.active ? 'false' : 'true'})">${tb.active ? '無効にする' : '有効にする'}</button></div>`).join('')}
+    </div>` : '<div class="card empty">テーブルが登録されていません</div>'}`;
 }
 /** 応答が返ったとき、まだ同じ大会の注文設定を開いているかを確かめる */
 function ordSame(id) { return S.view === 'adminOrd' && S.ord && S.ord.id === id; }
 async function ordOpen(open) {
   const h = document.getElementById('ordH'), id = S.ord.id;
   S.ord.busy = true; render();
-  try { const r = await call('adminOrderOpen', S.admin.pin, id, !!open, h ? h.value.trim() : S.ord.hours); if (!ordSame(id)) return; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; toast('保存しました'); }
+  try { const r = await call('adminOrderOpen', S.admin.pin, id, !!open, h ? h.value.trim() : S.ord.hours); if (!ordSame(id)) return; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; toast('保存しました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
@@ -763,11 +768,20 @@ async function ordSave(table, seats, active) {
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
-async function ordReissue(table, seats) {
-  if (!confirm(table + '番テーブルのQRを作り直します。古いQRは使えなくなります。よろしいですか？')) return;
+async function ordReissue() {
+  if (!confirm('注文用QRを作り直します。刷ってある古いQRは一斉に使えなくなり、印刷し直しが要ります。よろしいですか？')) return;
   const id = S.ord.id;
   S.ord.busy = true; render();
-  try { const r = await call('adminSaveTable', S.admin.pin, id, table, seats, '有効', 'new'); if (!ordSame(id)) return; S.ord.tables = r; toast('作り直しました。QRを置き換えてください'); }
+  try { const r = await call('adminOrderToken', S.admin.pin, id); if (!ordSame(id)) return; S.ord.token = r.orderToken; toast('作り直しました。QRを刷り直してください'); }
+  catch (e) { if (ordSame(id)) toast(errMsg(e)); }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
+}
+async function ordMake() {
+  const n = (document.getElementById('ordN') || {}).value, s = (document.getElementById('ordS2') || {}).value;
+  if (!confirm('1番から' + Number(n) + '番までのテーブルを' + Number(s) + '席で作ります。よろしいですか？')) return;
+  const id = S.ord.id;
+  S.ord.busy = true; render();
+  try { const r = await call('adminMakeTables', S.admin.pin, id, Number(n), Number(s)); if (!ordSame(id)) return; S.ord.tables = r; toast('作りました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }

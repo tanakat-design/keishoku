@@ -68,16 +68,17 @@ const Logger = { log() {} };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, openOrders_, SH, HEAD, ORD, rnd_, addDay_ };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminMakeTables, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_ };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
 Object.keys(X.HEAD).forEach(n => { DB[n] = []; });
 const today = X.bizDate_();
+const TOK = 'TOK1111111111aa';   // 大会の注文トークン（QRは大会に1枚）
 const tomo = X.addDay_(today, 1); // 期限は翌日にして、何時に流しても結果が変わらないようにする
-DB[X.SH.TOURN].push(['T1', 'テスト大会', '1234', '有効', new Date(), '受付中', '']);
-DB[X.SH.TABLE].push(['T1', '3', 9, 'tok1234567890ab', '有効', new Date()]);
-DB[X.SH.TABLE].push(['T1', '4', 9, 'tok4444444444aa', '無効', new Date()]);
+DB[X.SH.TOURN].push(['T1', 'テスト大会', '1234', '有効', new Date(), '受付中', '', 'TOK1111111111aa']);
+DB[X.SH.TABLE].push(['T1', '3', 9, '', '有効', new Date()]);
+DB[X.SH.TABLE].push(['T1', '4', 9, '', '無効', new Date()]);
 DB[X.SH.POP].push(['からあげ弁当', 2, '', new Date()]);
 DB[X.SH.POP].push(['おにぎり', 1, '', new Date()]);
 // 在庫設定：受取07:00、期限は今日の23:59
@@ -120,25 +121,25 @@ ok('受取済みは注文できる', sale['からあげ弁当'] === true);
 ok('受取前（翌04:30）は注文できない', !sale['夜食パン']);
 
 console.log('--- placeOrder ---');
-throws('トークンが違う', () => X.placeOrder('T1', '3', 'wrong', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r1'), /QR/);
-throws('無効な卓', () => X.placeOrder('T1', '4', 'tok4444444444aa', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r2'), /QR/);
-throws('存在しない卓', () => X.placeOrder('T1', '9', 'tok1234567890ab', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r3'), /QR/);
-throws('席が範囲外', () => X.placeOrder('T1', '3', 'tok1234567890ab', '10', [{ name: 'からあげ弁当', qty: 1 }], 'r4'), /席番号/);
-throws('席が0', () => X.placeOrder('T1', '3', 'tok1234567890ab', '0', [{ name: 'からあげ弁当', qty: 1 }], 'r5'), /席番号/);
-throws('売っていない品目', () => X.placeOrder('T1', '3', 'tok1234567890ab', '5', [{ name: '存在しない', qty: 1 }], 'r6'), /注文できません/);
-throws('リクエストIDなし', () => X.placeOrder('T1', '3', 'tok1234567890ab', '5', [{ name: 'からあげ弁当', qty: 1 }], ''), /リクエストID/);
+throws('トークンが違う', () => X.placeOrder('T1', 'wrong', '3', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r1'), /QR/);
+throws('無効な卓', () => X.placeOrder('T1', TOK, '4', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r2'), /登録されていません/);
+throws('存在しない卓', () => X.placeOrder('T1', TOK, '9', '5', [{ name: 'からあげ弁当', qty: 1 }], 'r3'), /登録されていません/);
+throws('席が範囲外', () => X.placeOrder('T1', TOK, '3', '10', [{ name: 'からあげ弁当', qty: 1 }], 'r4'), /席番号/);
+throws('席が0', () => X.placeOrder('T1', TOK, '3', '0', [{ name: 'からあげ弁当', qty: 1 }], 'r5'), /席番号/);
+throws('売っていない品目', () => X.placeOrder('T1', TOK, '3', '5', [{ name: '存在しない', qty: 1 }], 'r6'), /注文できません/);
+throws('リクエストIDなし', () => X.placeOrder('T1', TOK, '3', '5', [{ name: 'からあげ弁当', qty: 1 }], ''), /リクエストID/);
 
-const o1 = X.placeOrder('T1', '3', 'tok1234567890ab', '5', [{ name: 'からあげ弁当', qty: 1 }, { name: 'おにぎり', qty: 2 }], 'req-A');
+const o1 = X.placeOrder('T1', TOK, '3', '5', [{ name: 'からあげ弁当', qty: 1 }, { name: 'おにぎり', qty: 2 }], 'req-A');
 ok('注文できた', !!o1.id && !!o1.key, JSON.stringify(o1));
 ok('明細が2行', o1.lines.length === 2);
 ok('ドリチケ枚数が入る', DB[X.SH.ORDER][0][9] === '2', DB[X.SH.ORDER][0][9]);
 ok('状態は受付', o1.lines[0].state === '受付');
 ok('通知が積まれた', DB[X.SH.NOTIFY].length === 1 && /3番テーブルの5番シート/.test(DB[X.SH.NOTIFY][0][2]), DB[X.SH.NOTIFY][0] && DB[X.SH.NOTIFY][0][2]);
 
-const o1b = X.placeOrder('T1', '3', 'tok1234567890ab', '5', [{ name: 'からあげ弁当', qty: 1 }], 'req-A');
+const o1b = X.placeOrder('T1', TOK, '3', '5', [{ name: 'からあげ弁当', qty: 1 }], 'req-A');
 ok('同じリクエストIDは元の注文を返す', o1b.id === o1.id && DB[X.SH.ORDER].length === 2, 'rows=' + DB[X.SH.ORDER].length);
 
-throws('同じ席で続けて注文', () => X.placeOrder('T1', '3', 'tok1234567890ab', '5', [{ name: 'おにぎり', qty: 1 }], 'req-B'), /60秒/);
+throws('同じ席で続けて注文', () => X.placeOrder('T1', TOK, '3', '5', [{ name: 'おにぎり', qty: 1 }], 'req-B'), /60秒/);
 
 console.log('--- getOrder ---');
 const g = X.getOrder(o1.id, o1.key);
@@ -163,19 +164,34 @@ ok('未完了だけ返る', op.length === 1 && op[0].state === '配達中', JSON
 
 console.log('--- 受付停止 ---');
 X.adminOrderOpen(PROPS.ADMIN_PIN || (PROPS.ADMIN_PIN = '000000'), 'T1', false, '');
-throws('停止中は注文できない', () => X.placeOrder('T1', '3', 'tok1234567890ab', '6', [{ name: 'おにぎり', qty: 1 }], 'req-C'), /受け付けていません/);
+throws('停止中は注文できない', () => X.placeOrder('T1', TOK, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'req-C'), /受け付けていません/);
 X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '00:00-23:59');
-const o2 = X.placeOrder('T1', '3', 'tok1234567890ab', '6', [{ name: 'おにぎり', qty: 1 }], 'req-D');
+const o2 = X.placeOrder('T1', TOK, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'req-D');
 ok('再開したら注文できる', !!o2.id);
 
-console.log('--- 卓のトークン再発行 ---');
-const before = X.tables_('T1')[0].token;
-X.adminSaveTable(PROPS.ADMIN_PIN, 'T1', '3', 9, '有効', 'new');
-const after = X.tables_('T1')[0].token;
-ok('トークンが変わる', before !== after && after.length === 16);
-throws('古いQRは使えない', () => X.placeOrder('T1', '3', before, '7', [{ name: 'おにぎり', qty: 1 }], 'req-E'), /QR/);
+console.log('--- 注文トークンの再発行（大会に1つ・QRも1枚） ---');
+const before = TOK;
+const after = X.adminOrderToken(PROPS.ADMIN_PIN, 'T1').orderToken;
+ok('トークンが変わる', before !== after && after.length === 16, before + ' → ' + after);
+throws('古いQRは使えない', () => X.placeOrder('T1', before, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'req-E'), /QR/);
+ok('新しいトークンなら通る', !!X.placeOrder('T1', after, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'req-F').id);
+
+console.log('--- テーブルの一括作成 ---');
+const made = X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 10, 9);
+ok('1〜10番ができる', made.filter(t => t.active).length >= 10 && made.some(t => t.table === '10' && t.seats === 9), made.length + '卓');
+const made2 = X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 10, 8);
+ok('作り直しても増えない（席数だけ変わる）', made2.length === made.length && made2.filter(t => t.table === '10')[0].seats === 8);
+throws('卓数の上限', () => X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 99, 9), /卓数/);
+
+console.log('--- getOrderMenu ---');
+const mn = X.getOrderMenu('T1', after);
+ok('卓の一覧を返す', Array.isArray(mn.tables) && mn.tables.length >= 10 && mn.tables[0].seats > 0);
+ok('受付状況を返す', mn.open === true);
+throws('トークンが違えば開けない', () => X.getOrderMenu('T1', 'xxxx'), /QR/);
 
 console.log('--- レビューで見つかった不具合の再発防止 ---');
+const TOK3 = after;   // 上で作り直したあとの注文トークン
+
 // 1) 受付時間の桁ぞろえと、書き損じで開きっぱなしにしないこと
 ok('9:00-23:00 を日またぎと誤判定しない', X.inHours_('00:00-23:59') === true && X.inHours_('9:00-9:01') === false);
 ok('書式が違えば開けない', X.inHours_('11時から23時') === false);
@@ -185,8 +201,8 @@ ok("'9:00' を当日の09:00として扱う", X.recvAt_('2026-11-09', '9:00') ==
 ok("'1:00' を翌日として扱う", X.recvAt_('2026-11-09', '1:00') === '2026-11-10 01:00');
 // 3) 席の正規化（"01" で間隔制限をすり抜けない）
 DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
-X.placeOrder('T1', '3', X.tables_('T1')[0].token, '2', [{ name: 'おにぎり', qty: 1 }], 'rq1');
-throws('"02" でも同じ席として止まる', () => X.placeOrder('T1', '3', X.tables_('T1')[0].token, '02', [{ name: 'おにぎり', qty: 1 }], 'rq2'), /60秒/);
+X.placeOrder('T1', TOK3, '3', '2', [{ name: 'おにぎり', qty: 1 }], 'rq1');
+throws('"02" でも同じ席として止まる', () => X.placeOrder('T1', TOK3, '3', '02', [{ name: 'おにぎり', qty: 1 }], 'rq2'), /60秒/);
 ok('席は正規化して保存する', DB[X.SH.ORDER][0][6] === '2', DB[X.SH.ORDER][0][6]);
 // 4) 卓の制限は注文の数で数える（明細の数ではない）
 DB[X.SH.ORDER].length = 0;
@@ -195,16 +211,16 @@ for (let i = 0; i < 4; i++) {
   DB[X.SH.ORDER].push(['O' + i, 2, 'T1', 'テスト大会', today, '3', String(i + 1), 'からあげ弁当', 1, '2', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
 }
 let okFive = true;
-try { X.placeOrder('T1', '3', X.tables_('T1')[0].token, '9', [{ name: 'おにぎり', qty: 1 }], 'rq5'); } catch (e) { okFive = false; }
+try { X.placeOrder('T1', TOK3, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'rq5'); } catch (e) { okFive = false; }
 ok('明細8行でも注文4件なら5件目は通る', okFive);
-throws('注文5件目のあとは止まる', () => X.placeOrder('T1', '3', X.tables_('T1')[0].token, '8', [{ name: 'おにぎり', qty: 1 }], 'rq6'), /続いています/);
+throws('注文5件目のあとは止まる', () => X.placeOrder('T1', TOK3, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'rq6'), /続いています/);
 // 5) リクエストIDは大会をまたいで引き当てない
-DB[X.SH.TOURN].push(['T2', '別の大会', '9999', '有効', new Date(), '受付中', '']);
-DB[X.SH.TABLE].push(['T2', '1', 9, 'tok2222222222bb', '有効', new Date()]);
-throws('他の大会のリクエストIDでは引き当てられない', () => X.placeOrder('T2', '1', 'wrongtoken', '1', [{ name: 'おにぎり', qty: 1 }], 'rq5'), /QR/);
+DB[X.SH.TOURN].push(['T2', '別の大会', '9999', '有効', new Date(), '受付中', '', 'TOK2222222222bb']);
+DB[X.SH.TABLE].push(['T2', '1', 9, '', '有効', new Date()]);
+throws('他の大会のリクエストIDでは引き当てられない', () => X.placeOrder('T2', 'wrongtoken', '1', '1', [{ name: 'おにぎり', qty: 1 }], 'rq5'), /QR/);
 // 6) 同じ端末からの「届けに行く」の再送で、担当日時も通知も増えない
 DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
-const oz = X.placeOrder('T1', '3', X.tables_('T1')[0].token, '4', [{ name: 'おにぎり', qty: 1 }], 'rq7');
+const oz = X.placeOrder('T1', TOK3, '3', '4', [{ name: 'おにぎり', qty: 1 }], 'rq7');
 X.setOrder('T1', '1234', oz.id, 0, '配達中', '田中', 'devA', '');
 const t1st = DB[X.SH.ORDER][0][17], n1 = DB[X.SH.NOTIFY].length;
 X.setOrder('T1', '1234', oz.id, 0, '配達中', '田中', 'devA', '');
@@ -212,7 +228,7 @@ ok('再送しても担当日時が変わらない', DB[X.SH.ORDER][0][17] === t1
 ok('再送しても通知が増えない', DB[X.SH.NOTIFY].length === n1, DB[X.SH.NOTIFY].length + ' / ' + n1);
 // 7) 大会の保存で注文受付・受付時間を消さない（列数を HEAD に合わせる）
 const tRow = DB[X.SH.TOURN].find(r => r[0] === 'T1');
-ok('大会シートは7列のまま', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中', JSON.stringify(tRow));
+ok('大会シートは HEAD と同じ列数（8列）', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中' && !!tRow[7], JSON.stringify(tRow));
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);

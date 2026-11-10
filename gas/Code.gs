@@ -12,7 +12,7 @@ const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
 const TZ = 'Asia/Tokyo';
 const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち' };
 const HEAD = {
-  [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間'],
+  [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間', '注文トークン'],
   [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話'],
   [SH.LOG]: ['記録日時', '大会ID', '大会名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['大会ID', '大会名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
@@ -23,7 +23,7 @@ const HEAD = {
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
 const TEXT_COLS = {
-  [SH.TOURN]: [1, 3, 7], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
+  [SH.TOURN]: [1, 3, 7, 8], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
   [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1],
 };
 const TIME_COLS = {
@@ -57,6 +57,7 @@ const API = {
   getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
   getOrderMenu: getOrderMenu, placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
   adminTables: adminTables, adminSaveTable: adminSaveTable, adminOrderOpen: adminOrderOpen,
+  adminOrderToken: adminOrderToken, adminMakeTables: adminMakeTables,
 };
 function doPost(e) {
   let out;
@@ -280,9 +281,9 @@ function adminSave(pin, f) {
         stockRows.push([id, name, date, k + 1, n, s, str_(i.store), recv, exp, str_(i.method), str_(i.addr), str_(i.tel)]);
       });
     });
-    // 注文受付・受付時間は大会編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、大会一覧が消える
+    // 注文受付・受付時間・注文トークンは大会編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、大会一覧が消える
     const prev = rows_(SH.TOURN).filter(function (r) { return str_(r[0]) === id; })[0] || [];
-    replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date(), str_(prev[5]), str_(prev[6])]]);
+    replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date(), str_(prev[5]), str_(prev[6]), str_(prev[7])]]);
     replace_(SH.STOCK, function (r) { return str_(r[0]) === id; }, stockRows);
     try { tournSheet_(id, name); } catch (e) { console.warn('大会シートを作成できませんでした: ' + e); } // 失敗しても保存は有効
     return adminList(pin);
@@ -502,22 +503,26 @@ function newOrderId_() {
   throw new Error('注文を記録できませんでした。もう一度お願いします');
 }
 
-/** 注文画面用。QRの正しさをここで確かめ、席数と受付状況も返す。PIN不要 */
-function getOrderMenu(tid, table, token) {
-  tid = str_(tid); table = str_(table); token = str_(token);
-  const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
+/** 大会の注文トークンを確かめる。QRは大会に1枚で、卓と席はプレイヤーが選ぶ */
+function orderTourn_(tid, token) {
+  const t = tournaments_().filter(function (x) { return x.id === str_(tid) && x.active; })[0];
   if (!t) throw new Error('この大会は注文を受け付けていません');
-  const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
-  if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
-  const st = getPopState(tid, '');
-  st.seats = tb.seats;
+  if (!t.orderToken || t.orderToken !== str_(token)) throw new Error('このQRは使えません。スタッフにお知らせください');
+  return t;
+}
+
+/** 注文画面用。QRの正しさを確かめ、卓の一覧（席数つき）と受付状況も返す。PIN不要 */
+function getOrderMenu(tid, token) {
+  const t = orderTourn_(tid, token);
+  const st = getPopState(str_(tid), '');
+  st.tables = tables_(str_(tid)).filter(function (x) { return x.active; }).map(function (x) { return { table: x.table, seats: x.seats }; });
   st.open = !!(t.orderOpen && inHours_(t.orderHours));
   st.hours = t.orderHours;
   return st;
 }
 
 /** 注文を受け付ける。PIN不要 */
-function placeOrder(tid, table, token, seat, items, reqId) {
+function placeOrder(tid, token, table, seat, items, reqId) {
   tid = str_(tid); table = str_(table); token = str_(token); seat = str_(seat); reqId = str_(reqId);
   if (!reqId || reqId.length > 40) throw new Error('リクエストIDがありません');
   if (table.length > 8 || seat.length > 8) throw new Error('卓・席の指定が正しくありません');
@@ -525,10 +530,9 @@ function placeOrder(tid, table, token, seat, items, reqId) {
   // QRの確認を先にやる。これより前に再送の判定を置くと、リクエストIDを言い当てるだけで
   // トークン無しに他人の注文（照会キーを含む）を引き出せてしまう
   const check = function () {
-    const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
-    if (!t) throw new Error('この大会は注文を受け付けていません');
+    const t = orderTourn_(tid, token);
     const tb = tables_(tid).filter(function (x) { return x.table === table && x.active; })[0];
-    if (!tb || !tb.token || tb.token !== token) throw new Error('このQRは使えません。スタッフにお知らせください');
+    if (!tb) throw new Error('その卓は登録されていません。スタッフにお知らせください');
     const sn = Number(seat);
     if (!(sn >= 1 && sn <= tb.seats && sn === Math.floor(sn))) throw new Error('席番号が正しくありません');
     checkOrderOpen_(t);
@@ -619,7 +623,45 @@ function adminTables(pin, tid) {
   admin_(pin);
   const t = tournaments_().filter(function (x) { return x.id === str_(tid); })[0];
   if (!t) throw new Error('大会が見つかりません');
-  return { tables: tables_(str_(tid)), orderOpen: t.orderOpen, orderHours: t.orderHours };
+  return { tables: tables_(str_(tid)), orderOpen: t.orderOpen, orderHours: t.orderHours, orderToken: t.orderToken };
+}
+
+/** 大会の注文トークンを発行・再発行する。作り直すと、刷ってあるQRが一斉に使えなくなる */
+function adminOrderToken(pin, tid) {
+  admin_(pin);
+  tid = str_(tid);
+  return withLock_(function () {
+    const sh = sheet_(SH.TOURN), all = rows_(SH.TOURN);
+    let idx = -1;
+    all.forEach(function (r, i) { if (str_(r[0]) === tid) idx = i; });
+    if (idx < 0) throw new Error('大会が見つかりません');
+    const row = all[idx].slice();
+    row[7] = rnd_(16); row[4] = new Date();
+    sh.getRange(idx + 2, 1, 1, HEAD[SH.TOURN].length).setValues([row]);
+    return { orderToken: row[7] };
+  });
+}
+
+/** 卓をまとめて作る。1番から count 番まで、同じ席数で。既にある卓は席数だけ合わせる */
+function adminMakeTables(pin, tid, count, seats) {
+  admin_(pin);
+  tid = str_(tid);
+  const n = Number(count), s = Number(seats);
+  if (!(n >= 1 && n <= 60 && n === Math.floor(n))) throw new Error('卓数は1〜60の整数で入力してください');
+  if (!(s >= 1 && s <= 20 && s === Math.floor(s))) throw new Error('席数は1〜20の整数で入力してください');
+  return withLock_(function () {
+    const sh = sheet_(SH.TABLE), all = rows_(SH.TABLE), add = [];
+    for (let i = 1; i <= n; i++) {
+      const name = String(i);
+      let idx = -1;
+      all.forEach(function (r, k) { if (str_(r[0]) === tid && str_(r[1]) === name) idx = k; });
+      const row = [tid, name, s, idx >= 0 ? str_(all[idx][3]) : '', '有効', new Date()];
+      if (idx >= 0) sh.getRange(idx + 2, 1, 1, HEAD[SH.TABLE].length).setValues([row]);
+      else add.push(row);
+    }
+    if (add.length) append_(SH.TABLE, add);
+    return tables_(tid);
+  });
 }
 
 /** 卓を追加・変更する。token を 'new' にするとトークンを作り直す（過去のQRが失効する） */
@@ -656,9 +698,10 @@ function adminOrderOpen(pin, tid, open, hours) {
     const row = all[idx].slice();
     row[5] = open ? '受付中' : '停止';
     if (hours !== undefined && hours !== null) row[6] = str_(hours);
+    if (!str_(row[7])) row[7] = rnd_(16);   // まだ無ければ、受付を開くときに注文トークンを作る
     row[4] = new Date();
     sh.getRange(idx + 2, 1, 1, HEAD[SH.TOURN].length).setValues([row]);
-    return { orderOpen: !!open, orderHours: str_(row[6]) };
+    return { orderOpen: !!open, orderHours: str_(row[6]), orderToken: str_(row[7]) };
   });
 }
 
@@ -943,8 +986,9 @@ function state_(t, date) {
 function tournaments_() {
   return rows_(SH.TOURN).filter(function (r) { return str_(r[0]); }).map(function (r) {
     // 注文受付は空欄なら「停止」とみなす（PIN不要の入口なので、明示したときだけ開ける）
+    // 注文トークンは大会に1つ。QRも大会に1枚で、卓と席はプレイヤーが選ぶ
     return { id: str_(r[0]), name: str_(r[1]), staffPin: str_(r[2]), active: str_(r[3]) !== '無効',
-      orderOpen: str_(r[5]) === '受付中', orderHours: str_(r[6]) };
+      orderOpen: str_(r[5]) === '受付中', orderHours: str_(r[6]), orderToken: str_(r[7]) };
   });
 }
 
