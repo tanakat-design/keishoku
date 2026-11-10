@@ -10,6 +10,7 @@
 - `order.html`：卓上注文（プレイヤー用。卓のQRから開く。PIN不要）
 - `test.html`：POPの表示テスト（SPADIE / JOPT / 標準のリンク集。見本データで開く）
 - `gas/test-order.js`：GASのグローバルをスタブして注文ロジックを Node で検証する（`node gas/test-order.js gas/Code.gs`）
+- `gas/check-live.js`：本番に入っている大会の設定を外から点検する（`node gas/check-live.js <大会ID>`。引数なしで大会一覧）。PIN不要・読み取りだけなので何度流しても本番は変わらない
 - `ORDER.md`：卓上注文と通知の設計 ／ `SETUP-ORDER.md`：GASの貼り替えからQR・通知設定までの手順
 - `gas/test_osaka02.csv`：CSV取り込みのテスト用データ
 
@@ -147,4 +148,6 @@
 - 修正後のコードは、差分か、置き換えるファイル全体で示す。
 - 可能なら、Node等で関数単体のテスト（例：importKeishoku にテストCSVを入れて結果を表示する）を行う。
 - GAS を変えたら `node gas/test-order.js gas/Code.gs` を流す。GASのグローバルをスタブして注文まわりを106件検証する。GASを動かさずに壊れに気づける。
+- 大会の設定（開催日・品目・受取・賞味期限）を変えたら `node gas/check-live.js <大会ID>` を流す。本番の `getPopState` を読んで、日付の取り違え・受取時間や店舗の空欄・賞味期限が受取時刻より前・写真やドリチケの未設定を拾う。要確認があれば終了コード1で終わる。API_URL は `index.html` から読むので書き写さない。
+- 本番のGASが手元と同じか確かめるときは、GASエディタで全選択してコピーし、`gas/Code.gs` と diff する。デプロイ済みの版は「デプロイを管理」で日時を見る。
 - 画面を変えたら、ローカルで確かめる。`.claude/launch.json` の `keishoku`（`python -m http.server 8765`）を起動し、`window.fetch` を差し替えてAPIを模すと、GASに触らずに画面を動かせる。
