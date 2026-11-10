@@ -54,7 +54,7 @@
 - 卓上注文用（`ORDER.md` に設計、`SETUP-ORDER.md` に反映手順）
   - `getOrderMenu(tid, token)`：PIN不要。大会の注文トークンを確かめ、POPと同じ在庫状況に卓の一覧（席数つき）と受付状況を足して返す
   - `placeOrder(tid, token, table, seat, items, reqId)`：PIN不要。大会の注文トークン・卓席の実在・受付中・受付時間・個数と回数の制限・品目が本当に販売中かを順に確かめる。reqId の重複確認を回数制限より先にやる
-  - `adminOrderToken(pin, tid)`：注文トークンの発行・再発行（刷ってあるQRが一斉に失効する）／`adminMakeTables(pin, tid, count, seats)`：テーブルの一括作成
+  - `adminOrderToken(pin, tid)`：注文トークンの発行・再発行（刷ってあるQRが一斉に失効する）／`adminSetTables(pin, tid, spec, seats)`：卓の一括設定（`parseTableSpec_` が「101-110」「001-012」「VIP」などを解釈する。ゼロ埋めは桁を保つ。書いた卓がその大会の卓になり、既存の席数は残り、書かなかった卓は消える）／`adminPreviewTables(pin, spec)`：解釈結果だけ返す（保存前の確認用）
   - `getOrder(id, key)`：PIN不要。照会キーが合う注文だけ返す。プレイヤー画面の状態表示用
   - `setOrder(tid, pin, id, no, state, staff, device, reason)`：配達中／完了／取消。先に押した人を勝ちにし、終端状態からは戻さない
   - `adminTables` / `adminSaveTable`（トークン再発行）／ `adminOrderOpen`（緊急停止・受付時間）

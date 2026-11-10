@@ -46,7 +46,8 @@ const SpreadsheetApp = {
               },
               setValue(v) { DB[name][r - 2][c - 1] = v; },
               setFontWeight() { return this; }, setBackground() { return this; },
-              setNumberFormat() { return this; }, clearContent() { return this; },
+              setNumberFormat() { return this; },
+              clearContent() { if (r >= 2) DB[name].length = Math.max(0, r - 2); return this; },
             };
           },
         };
@@ -68,7 +69,7 @@ const Logger = { log() {} };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminMakeTables, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_ };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_ };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -176,21 +177,40 @@ ok('トークンが変わる', before !== after && after.length === 16, before +
 throws('古いQRは使えない', () => X.placeOrder('T1', before, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'req-E'), /QR/);
 ok('新しいトークンなら通る', !!X.placeOrder('T1', after, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'req-F').id);
 
-console.log('--- テーブルの一括作成 ---');
-const made = X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 10, 9);
-ok('1〜10番ができる', made.filter(t => t.active).length >= 10 && made.some(t => t.table === '10' && t.seats === 9), made.length + '卓');
-const made2 = X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 10, 8);
-ok('作り直しても増えない（席数だけ変わる）', made2.length === made.length && made2.filter(t => t.table === '10')[0].seats === 8);
-throws('卓数の上限', () => X.adminMakeTables(PROPS.ADMIN_PIN, 'T1', 99, 9), /卓数/);
+console.log('--- 卓番号の書き方 ---');
+const PS = X.parseTableSpec_;
+ok('範囲', JSON.stringify(PS('101-105')) === '["101","102","103","104","105"]', JSON.stringify(PS('101-105')));
+ok('ゼロ埋めを保つ', JSON.stringify(PS('001-003')) === '["001","002","003"]', JSON.stringify(PS('001-003')));
+ok('カンマ区切り', JSON.stringify(PS('1,2,3')) === '["1","2","3"]');
+ok('空白・改行区切り', JSON.stringify(PS('5 6' + String.fromCharCode(10) + '7')) === '["5","6","7"]');
+ok('番号でなくてもよい', JSON.stringify(PS('VIP, 1')) === '["VIP","1"]');
+ok('混ぜられる', JSON.stringify(PS('101-103, 201, VIP')) === '["101","102","103","201","VIP"]', JSON.stringify(PS('101-103, 201, VIP')));
+ok('全角も読む', JSON.stringify(PS('１０１－１０２')) === '["101","102"]', JSON.stringify(PS('１０１－１０２')));
+ok('重複は1つに', JSON.stringify(PS('1,1,2')) === '["1","2"]');
+throws('空', () => PS('  '), /入力/);
+throws('逆向きの範囲', () => PS('110-101'), /逆/);
+throws('広すぎる範囲', () => PS('1-999'), /広すぎ/);
+throws('長すぎる卓番号', () => PS('ABCDEFGHI'), /8文字/);
+throws('卓が多すぎる', () => PS('1-50, 101-150'), /60/);
+
+console.log('--- 卓の設定 ---');
+const made = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-110', 9);
+ok('101〜110ができる', made.length === 10 && made[0].table === '101' && made[9].table === '110' && made[0].seats === 9, made.length + '卓');
+X.adminSaveTable(PROPS.ADMIN_PIN, 'T1', '105', 6, '有効', '');
+const made2 = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-110', 9);
+ok('個別に変えた席数は残る', made2.filter(t => t.table === '105')[0].seats === 6);
+const made3 = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-103', 9);
+ok('書かなかった卓は消える', made3.length === 3 && !made3.some(t => t.table === '110'));
 
 console.log('--- getOrderMenu ---');
 const mn = X.getOrderMenu('T1', after);
-ok('卓の一覧を返す', Array.isArray(mn.tables) && mn.tables.length >= 10 && mn.tables[0].seats > 0);
+ok('卓の一覧を返す', Array.isArray(mn.tables) && mn.tables.length === 3 && mn.tables[0].table === '101' && mn.tables[0].seats > 0, JSON.stringify(mn.tables));
 ok('受付状況を返す', mn.open === true);
 throws('トークンが違えば開けない', () => X.getOrderMenu('T1', 'xxxx'), /QR/);
 
 console.log('--- レビューで見つかった不具合の再発防止 ---');
 const TOK3 = after;   // 上で作り直したあとの注文トークン
+X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '3', 9);   // この節は3番卓を使う
 
 // 1) 受付時間の桁ぞろえと、書き損じで開きっぱなしにしないこと
 ok('9:00-23:00 を日またぎと誤判定しない', X.inHours_('00:00-23:59') === true && X.inHours_('9:00-9:01') === false);

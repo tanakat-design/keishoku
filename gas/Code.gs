@@ -57,7 +57,7 @@ const API = {
   getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
   getOrderMenu: getOrderMenu, placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
   adminTables: adminTables, adminSaveTable: adminSaveTable, adminOrderOpen: adminOrderOpen,
-  adminOrderToken: adminOrderToken, adminMakeTables: adminMakeTables,
+  adminOrderToken: adminOrderToken, adminSetTables: adminSetTables, adminPreviewTables: adminPreviewTables,
 };
 function doPost(e) {
   let out;
@@ -642,24 +642,63 @@ function adminOrderToken(pin, tid) {
   });
 }
 
-/** 卓をまとめて作る。1番から count 番まで、同じ席数で。既にある卓は席数だけ合わせる */
-function adminMakeTables(pin, tid, count, seats) {
+/**
+ * 卓番号の書き方を解釈する。会場によって 101 始まりや 001 のようなゼロ付きがあるため、
+ * 連番だけでなく自由に書けるようにする。
+ *   「101-110」      → 101, 102, … 110
+ *   「001-012」      → 001, 002, … 012（先頭が0なら桁をそろえる）
+ *   「1,2,3」「A B」 → そのまま
+ *   混ぜてもよい：「101-110, 201-205, VIP」
+ * 区切りは カンマ・読点・空白・改行。
+ */
+function parseTableSpec_(spec) {
+  const out = [], seen = {};
+  const add = function (name) {
+    name = str_(name);
+    if (!name) return;
+    if (name.length > 8) throw new Error('卓番号は8文字以内にしてください：' + name);
+    if (seen[name]) return;
+    seen[name] = 1; out.push(name);
+    if (out.length > 60) throw new Error('卓は60までにしてください');
+  };
+  str_(spec).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+    .split(/[,、\s]+/).forEach(function (tk) {
+      tk = str_(tk);
+      if (!tk) return;
+      const m = tk.match(/^(\d+)\s*[-−〜～]\s*(\d+)$/);
+      if (!m) { add(tk); return; }
+      const a = Number(m[1]), b = Number(m[2]);
+      const w = /^0/.test(m[1]) ? m[1].length : 0;   // 先頭が0なら桁をそろえる
+      if (!(b >= a)) throw new Error('範囲の指定が逆です：' + tk);
+      if (b - a > 59) throw new Error('範囲が広すぎます：' + tk);
+      for (let i = a; i <= b; i++) add(w ? String(i).padStart(w, '0') : String(i));
+    });
+  if (!out.length) throw new Error('卓番号を入力してください');
+  return out;
+}
+
+/** 卓番号を解釈だけして返す（画面で確認するため） */
+function adminPreviewTables(pin, spec) { admin_(pin); return parseTableSpec_(spec); }
+
+/**
+ * 卓の一覧をまとめて設定する。spec に書いた卓がその大会の卓になる。
+ * すでにある卓は席数をそのまま残す（個別に変えた席数が消えないように）。spec に無い卓は削除する。
+ */
+function adminSetTables(pin, tid, spec, seats) {
   admin_(pin);
   tid = str_(tid);
-  const n = Number(count), s = Number(seats);
-  if (!(n >= 1 && n <= 60 && n === Math.floor(n))) throw new Error('卓数は1〜60の整数で入力してください');
+  const names = parseTableSpec_(spec);
+  const s = Number(seats);
   if (!(s >= 1 && s <= 20 && s === Math.floor(s))) throw new Error('席数は1〜20の整数で入力してください');
   return withLock_(function () {
-    const sh = sheet_(SH.TABLE), all = rows_(SH.TABLE), add = [];
-    for (let i = 1; i <= n; i++) {
-      const name = String(i);
-      let idx = -1;
-      all.forEach(function (r, k) { if (str_(r[0]) === tid && str_(r[1]) === name) idx = k; });
-      const row = [tid, name, s, idx >= 0 ? str_(all[idx][3]) : '', '有効', new Date()];
-      if (idx >= 0) sh.getRange(idx + 2, 1, 1, HEAD[SH.TABLE].length).setValues([row]);
-      else add.push(row);
-    }
-    if (add.length) append_(SH.TABLE, add);
+    const old = {};
+    rows_(SH.TABLE).forEach(function (r) { if (str_(r[0]) === tid) old[str_(r[1])] = r; });
+    const now = new Date();
+    const rows = names.map(function (n) {
+      const o = old[n];
+      return [tid, n, o ? (Number(o[2]) || s) : s, o ? str_(o[3]) : '', o ? str_(o[4]) || '有効' : '有効', now];
+    });
+    replace_(SH.TABLE, function (r) { return str_(r[0]) === tid; }, rows);
     return tables_(tid);
   });
 }

@@ -689,7 +689,7 @@ async function setActive(i, on) {
 const ORDER_BASE = 'https://tanakat-design.github.io/keishoku/order.html';
 async function ordT(i) {
   const t = S.admin.list[i];
-  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', token: '', busy: false };
+  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', token: '', busy: false, spec: null, preview: null };
   S.view = 'adminOrd'; render();
   loadQrLib();
   // 待っている間に別の大会の注文設定を開いていたら、その画面に前の大会の内容を入れない
@@ -737,15 +737,20 @@ function renderAdminOrd() {
       <div class="popctl" style="margin-top:8px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordReissue()">QRを作り直す</button></div>
       <div class="small" style="margin-top:4px">作り直すと、刷ってある古いQRが一斉に使えなくなります。印刷し直しが要ります。</div>
     </div>` : '<div class="card"><div class="small">「受付を開始する」を押すとQRが出ます。</div></div>'}
-    <div class="card"><div style="font-weight:700">テーブルをまとめて作る</div>
-      <div class="popctl" style="margin-top:8px"><span class="small">テーブル数</span><input id="ordN" inputmode="numeric" style="width:70px" value="10"><span class="small">席数</span><input id="ordS2" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordMake()">作る</button></div>
-      <div class="small" style="margin-top:6px">1番から順に作ります。すでにあるテーブルは席数だけ合わせます。席数が違うテーブルは下で個別に直せます。</div>
-    </div>
-    <div class="card"><div style="font-weight:700">テーブルを個別に追加・変更</div>
-      <div class="popctl" style="margin-top:8px"><span class="small">テーブル番号</span><input id="ordT" style="width:90px" placeholder="3"><span class="small">席数</span><input id="ordS" inputmode="numeric" style="width:70px" value="9"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave()">追加・保存</button></div>
+    <div class="card"><div style="font-weight:700">テーブルの設定</div>
+      <div class="small" style="margin-top:4px">使うテーブル番号を書きます。<b>101-110</b> のように範囲で書けます。<b>001-012</b> と書けばゼロ付きのまま作ります。カンマ・空白・改行で区切り、番号でなくても構いません（例：VIP）。</div>
+      <textarea id="ordSpec" rows="3" style="width:100%;margin-top:8px;font-size:15px;padding:8px" placeholder="例：101-110, 201-205">${esc(o.spec != null ? o.spec : tbs.map(t => t.table).join(', '))}</textarea>
+      <div class="popctl" style="margin-top:8px"><span class="small">席数</span><input id="ordS2" inputmode="numeric" style="width:70px" value="${tbs.length ? tbs[0].seats : 9}">
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordPreview()">確認</button>
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSet()">この内容にする</button></div>
+      ${o.preview ? `<div class="notice info" style="margin-top:8px">${o.preview.length}卓になります：${esc(o.preview.join('、'))}</div>` : ''}
+      <div class="small" style="margin-top:6px">書いた卓がそのままこの大会の卓になります。すでにある卓の席数はそのまま残り、書かなかった卓は消えます。</div>
     </div>
     ${o.tables == null ? '<div class="card empty">読み込み中…</div>' : tbs.length ? `<div class="card"><div style="font-weight:700">登録済みのテーブル（${tbs.length}）</div>
-      ${tbs.map(tb => `<div class="popctl" style="margin-top:8px"><span style="flex:1">${esc(tb.table)}番　<span class="small">${tb.seats}席　${tb.active ? '有効' : '無効'}</span></span>
+      <div class="small" style="margin-top:4px">席数が違うテーブルは、ここで直します。</div>
+      ${tbs.map(tb => `<div class="popctl" style="margin-top:8px"><span style="flex:1">${esc(tb.table)}　<span class="small">${tb.active ? '' : '無効　'}</span></span>
+        <span class="small">席数</span><input id="st_${esc(tb.table)}" inputmode="numeric" style="width:60px" value="${tb.seats}">
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSeats('${esc(tb.table)}')">保存</button>
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave('${esc(tb.table)}', ${tb.seats}, ${tb.active ? 'false' : 'true'})">${tb.active ? '無効にする' : '有効にする'}</button></div>`).join('')}
     </div>` : '<div class="card empty">テーブルが登録されていません</div>'}`;
 }
@@ -763,8 +768,11 @@ async function ordSave(table, seats, active) {
   const sv = seats != null ? seats : (document.getElementById('ordS') || {}).value;
   if (!String(tb || '').trim()) return toast('卓番号を入れてください');
   const id = S.ord.id;
+  // active を渡さないときは今の状態を変えない（席数だけ直すとき、無効の卓が勝手に有効に戻らないように）
+  const cur = (S.ord.tables || []).filter(x => x.table === String(tb))[0];
+  const act = active === undefined ? (cur ? cur.active : true) : active;
   S.ord.busy = true; render();
-  try { const r = await call('adminSaveTable', S.admin.pin, id, String(tb).trim(), Number(sv), active === false ? '無効' : '有効', ''); if (!ordSame(id)) return; S.ord.tables = r; toast('保存しました'); }
+  try { const r = await call('adminSaveTable', S.admin.pin, id, String(tb).trim(), Number(sv), act === false ? '無効' : '有効', ''); if (!ordSame(id)) return; S.ord.tables = r; toast('保存しました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
@@ -776,14 +784,32 @@ async function ordReissue() {
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
-async function ordMake() {
-  const n = (document.getElementById('ordN') || {}).value, s = (document.getElementById('ordS2') || {}).value;
-  if (!confirm('1番から' + Number(n) + '番までのテーブルを' + Number(s) + '席で作ります。よろしいですか？')) return;
-  const id = S.ord.id;
+function ordSpecValue() { const e = document.getElementById('ordSpec'); return e ? e.value : ''; }
+/** 書いた内容がどう解釈されるかだけ見る。保存はしない */
+async function ordPreview() {
+  const id = S.ord.id, spec = ordSpecValue();
+  S.ord.spec = spec; S.ord.busy = true; render();
+  try { const r = await call('adminPreviewTables', S.admin.pin, spec); if (!ordSame(id)) return; S.ord.preview = r; }
+  catch (e) { if (ordSame(id)) { S.ord.preview = null; toast(errMsg(e)); } }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
+}
+async function ordSet() {
+  const id = S.ord.id, spec = ordSpecValue(), s = (document.getElementById('ordS2') || {}).value;
+  S.ord.spec = spec;
+  let list;
+  try { list = await call('adminPreviewTables', S.admin.pin, spec); } catch (e) { return toast(errMsg(e)); }
+  const gone = (S.ord.tables || []).filter(t => list.indexOf(t.table) < 0).map(t => t.table);
+  if (!confirm(list.length + '卓にします。\n\n' + list.join('、') + (gone.length ? '\n\n消える卓：' + gone.join('、') : '') + '\n\nよろしいですか？')) return;
   S.ord.busy = true; render();
-  try { const r = await call('adminMakeTables', S.admin.pin, id, Number(n), Number(s)); if (!ordSame(id)) return; S.ord.tables = r; toast('作りました'); }
+  try { const r = await call('adminSetTables', S.admin.pin, id, spec, Number(s)); if (!ordSame(id)) return; S.ord.tables = r; S.ord.spec = null; S.ord.preview = null; toast('設定しました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
+}
+/** 1卓だけ席数を変える */
+async function ordSeats(table) {
+  const e = document.getElementById('st_' + table);
+  if (!e) return;
+  await ordSave(table, Number(e.value), undefined);
 }
 
 /* ===== デジタルPOP設定（写真・ドリチケ枚数） ===== */
