@@ -414,14 +414,24 @@ function tables_(tid) {
 }
 
 /** 受付時間（「11:00-23:00」形式。空なら時刻では絞らない）。終わりが始まりより小さいときは日をまたぐ */
+/** 24時を超える書き方（28:00＝翌日の4時）も読む。深夜までの会場ではこの書き方が普通 */
+function hmLate_(v) {
+  const m = str_(v).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  if (h > 47 || Number(m[2]) > 59) return null;
+  return { hm: String(h % 24).padStart(2, '0') + ':' + m[2], over: h >= 24 };
+}
 function inHours_(hours) {
   const s = str_(hours).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
   if (!s) return true;                                   // 空欄は時刻で絞らない
   const m = s.match(/^(\d{1,2}:\d{2})\s*[-~〜]\s*(\d{1,2}:\d{2})$/);
-  const a = m && hm2_(m[1]), b = m && hm2_(m[2]);
+  const a = m && hmLate_(m[1]), b = m && hmLate_(m[2]);
   if (!a || !b) return false;                            // 書式が違うときは開けない（書き損じで開きっぱなしにしない）
+  // 日をまたぐか：片方だけが24時超え（10:00-28:00）なら必ずまたぐ。そうでなければ時刻の前後で決める
+  const wrap = a.over === b.over ? a.hm > b.hm : b.over;
   const now = Utilities.formatDate(new Date(), TZ, 'HH:mm');
-  return a <= b ? (now >= a && now <= b) : (now >= a || now <= b);   // 桁を揃えてから比べる
+  return wrap ? (now >= a.hm || now <= b.hm) : (now >= a.hm && now <= b.hm);
 }
 
 function checkOrderOpen_(t) {

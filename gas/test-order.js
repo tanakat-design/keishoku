@@ -215,6 +215,21 @@ X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '3', 9);   // この節は3番卓を使�
 // 1) 受付時間の桁ぞろえと、書き損じで開きっぱなしにしないこと
 ok('9:00-23:00 を日またぎと誤判定しない', X.inHours_('00:00-23:59') === true && X.inHours_('9:00-9:01') === false);
 ok('書式が違えば開けない', X.inHours_('11時から23時') === false);
+// 深夜までの会場は 28:00 のように24時を超えて書く
+ok('10:00-28:00 は昼も深夜も受付中', X.inHours_('10:00-28:00') === true);
+ok('10:00-28:00 は朝5時には受付外', (function () {
+  const real = Utilities.formatDate; let out;
+  Utilities.formatDate = function (d, tz, f) { return f === 'HH:mm' ? '05:00' : real(d, tz, f); };
+  try { out = X.inHours_('10:00-28:00'); } finally { Utilities.formatDate = real; }
+  return out === false;
+})());
+ok('25:00-28:00（翌1時〜4時）は昼には受付外', (function () {
+  const real = Utilities.formatDate; let out;
+  Utilities.formatDate = function (d, tz, f) { return f === 'HH:mm' ? '12:00' : real(d, tz, f); };
+  try { out = X.inHours_('25:00-28:00'); } finally { Utilities.formatDate = real; }
+  return out === false;
+})());
+ok('48:00 のような書き方は開けない', X.inHours_('10:00-48:00') === false);
 ok('空欄なら開く', X.inHours_('') === true);
 // 2) 受取時刻の桁ぞろえ
 ok("'9:00' を当日の09:00として扱う", X.recvAt_('2026-11-09', '9:00') === '2026-11-09 09:00');
