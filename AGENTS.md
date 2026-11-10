@@ -31,6 +31,10 @@
 - 応答は `{ok:true, result}` または `{ok:false, error}`。
 - API_URL：`https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec`
 - GASのデプロイ設定：実行ユーザーは「自分」、アクセスは「全員」。
+- **スクリプトが2つある。間違えやすいので必ず確かめる。**
+  - Webアプリ本体：標準プロジェクト「JOPT 軽食在庫管理アプリ」（ID `18bldE18xsyoErj76LxhIf60b5j7__kzLQ7pO2_AS4N_swxRCe5uY5pNQ`）。`API_URL` が叩くのはこれ。**貼り替えもデプロイもこちらでやる。**
+  - スプレッドシートに紐付いた別物：「無題のプロジェクト」（ID `1A-MfICMYBVBkASQjoxnacHcVh7cgsppcQ8WyPD1-8Ut1eKUPj2JH47oy`）。シートの「拡張機能 → Apps Script」で開くのはこちら。`onOpen` はコンテナバインドでしか動かないため、**シートのメニュー「軽食アプリ」はこちらから出ている。**
+  - **スクリプト プロパティはプロジェクトごとに別。**そのためシートのメニューの「管理者PINを表示」が見せるのは無題のプロジェクト側の `ADMIN_PIN` で、Webアプリが照合するPINとは一致しない。管理者PINは「JOPT 軽食在庫管理アプリ」の プロジェクトの設定 → スクリプト プロパティ → `ADMIN_PIN` を見る。`NOTIFY_KIND` などの通知設定も同じ理由でWebアプリ側に入れる。
 - Workspaceの制限でGASのHTML画面は開けない。そのため画面はGitHub Pagesに置いている。GAS内の Index.html は使っていない（バックアップのみ）。
 
 # 3. API（Code.gs の `API` オブジェクト）
