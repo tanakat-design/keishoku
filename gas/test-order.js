@@ -35,8 +35,13 @@ const SpreadsheetApp = {
           getRange(r, c, nr, nc) {
             return {
               setValues(v) {
-                if (nr === 1 && r >= 2) DB[name][r - 2] = v[0].slice();
-                else v.forEach((row, i) => { DB[name][r - 2 + i] = row.slice(); });
+                // 列の途中への書き込み（getRange(行, 4, 1, 3) など）も本物と同じく部分更新にする。
+                // 行ごと置き換えると、部分更新の取りこぼしに気づけない
+                v.forEach((row, i) => {
+                  const cur = DB[name][r - 2 + i] || [];
+                  for (let k = 0; k < row.length; k++) cur[c - 1 + k] = row[k];
+                  DB[name][r - 2 + i] = cur;
+                });
                 return this;
               },
               getValues() {
@@ -69,7 +74,7 @@ const Logger = { log() {} };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_ };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -264,6 +269,79 @@ ok('再送しても通知が増えない', DB[X.SH.NOTIFY].length === n1, DB[X.S
 // 7) 大会の保存で注文受付・受付時間を消さない（列数を HEAD に合わせる）
 const tRow = DB[X.SH.TOURN].find(r => r[0] === 'T1');
 ok('大会シートは HEAD と同じ列数（8列）', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中' && !!tRow[7], JSON.stringify(tRow));
+
+
+console.log('\n--- 2回目のレビュー（本番前の見直し）で見つかった分 ---');
+// 1) 実在しない時刻・日時を通さない。通すと文字列比較の販売判定が狂う
+ok('10:99 は受取時刻として読まない', X.hm2_('10:99') === '' && X.hm2_('10:30') === '10:30');
+ok('2026-02-31 は賞味期限として読まない', X.validDT_('2026-02-31 10:00') === false && X.validDT_('2026-02-28 10:00') === true);
+ok('25:00 や 10:70 は賞味期限として読まない', X.validDT_('2026-03-01 25:00') === false && X.validDT_('2026-03-01 10:70') === false);
+const form = { id: 'T1', name: 'テスト大会', staffPin: '1234', active: true,
+  days: [{ date: today, items: [{ name: 'おにぎり', stock: 10, recv: '25:00', store: 'テスト店', exp: '' }] }] };
+throws('受取時間 25:00 は保存できない', () => X.adminSave(PROPS.ADMIN_PIN, form), /受取時間/);
+form.days[0].items[0].recv = '07:00'; form.days[0].items[0].exp = '2026-02-31 10:00';
+throws('賞味期限 2026-02-31 は保存できない', () => X.adminSave(PROPS.ADMIN_PIN, form), /賞味期限/);
+
+// 2) 受付時間の書き損じを保存できない（「受付中」のまま全部の注文が静かに弾かれるのを防ぐ）
+throws('受付時間の書式違いは保存できない', () => X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '11時から23時'), /受付時間/);
+ok('10:00-28:00 は保存できる', X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '10:00-28:00').orderHours === '10:00-28:00');
+const TOK4 = X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '').orderToken;
+ok('管理画面に実際の受付状況が出る', (function () {
+  const r = X.adminTables(PROPS.ADMIN_PIN, 'T1');
+  return r.openNow === true && r.hoursOk === true;
+})());
+ok('スタッフ画面にも実際の受付状況が出る', X.getDayState('T1', '1234', today).orderOpenNow === true);
+
+// 3) 受付が終わってからの再送でも、保存済みの注文は成功として返す
+DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
+const oa = X.placeOrder('T1', TOK4, '3', '1', [{ name: 'おにぎり', qty: 1 }], 'rqA');
+X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', false, '');
+ok('受付停止後の再送でも注文が返る', (function () {
+  try { const r = X.placeOrder('T1', TOK4, '3', '1', [{ name: 'おにぎり', qty: 1 }], 'rqA'); return r.id === oa.id; }
+  catch (e) { return false; }
+})());
+throws('受付停止中の新しい注文は弾く', () => X.placeOrder('T1', TOK4, '3', '2', [{ name: 'おにぎり', qty: 1 }], 'rqB'), /受け付けていません/);
+X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '');
+
+// 4) 継承プロパティの品目名で、空の注文が保存できてしまわない
+throws('constructor という品目名は注文できない', () => X.placeOrder('T1', TOK4, '3', '3', [{ name: 'constructor', qty: 1 }], 'rqC'), /注文できません/);
+ok('品目名が constructor でも明細をなくさない', X.normItems_([{ name: 'constructor', qty: 2 }]).length === 1);
+
+// 5) 深夜のスタッフ既定日を、注文の記録日（営業日）に合わせる
+ok('スタッフの既定日は営業日', X.getTournaments().today === X.bizDate_() && X.staffLogin('T1', '1234').today === X.bizDate_());
+
+// 6) 未完了が上限に近づいても、古い明細を一覧から隠さない（古いほど急ぎ）
+ok('一覧の上限は受付停止の上限より大きい', X.ORD.LIST_MAX > X.ORD.OPEN_MAX + X.ORD.MAX_KINDS, X.ORD.LIST_MAX + ' / ' + X.ORD.OPEN_MAX);
+ok('未完了が上限を超えても全部返る', (function () {
+  DB[X.SH.ORDER].length = 0;
+  for (let i = 0; i < X.ORD.OPEN_MAX + 4; i++) {
+    DB[X.SH.ORDER].push(['Z' + i, 1, 'T1', 'テスト大会', today, '3', '1', 'おにぎり', 1, '1', '受付', '', 'k', 'zz' + i, new Date(), '', '', '', '', '']);
+  }
+  const list = X.openOrders_('T1', today);
+  return list.length === X.ORD.OPEN_MAX + 4 && list[0].id === 'Z0';
+})());
+
+// 7) 「送信中」のまま取り残された通知を拾い直す
+DB[X.SH.NOTIFY].length = 0;
+PROPS.NOTIFY_KIND = 'discord'; PROPS.DISCORD_WEBHOOK = 'https://example.invalid/hook';
+ok('通知を積めたら true を返す', X.notifyPush_('注文', 'テスト') === true);
+ok('5分以上前の送信中は取り残しと見る', (function () {
+  const old = new Date(Date.now() - 10 * 60000), now = new Date();
+  return X.stale_(['n', '注文', 'x', '送信中', old, old, 0, ''], Date.now()) === true
+    && X.stale_(['n', '注文', 'x', '送信中', now, now, 0, ''], Date.now()) === false
+    && X.stale_(['n', '注文', 'x', '送信済', old, old, 0, ''], Date.now()) === false;
+})());
+ok('取り残された通知は次の実行で送られる', (function () {
+  DB[X.SH.NOTIFY].length = 0;
+  const old = new Date(Date.now() - 10 * 60000);
+  DB[X.SH.NOTIFY].push(['N1', '注文', '取り残し', '送信中', old, old, 0, '']);
+  X.sendPending();
+  return DB[X.SH.NOTIFY][0][3] === '送信済';
+})());
+
+// 8) ドリチケ枚数だけの読み出し（注文のロックの中で写真を全部読まない）
+ok('ドリチケ枚数だけ読める', (function () { const m = X.popPrices_(); return m['おにぎり'].price === 1 && m['おにぎり'].img === undefined; })());
+delete PROPS.NOTIFY_KIND; delete PROPS.DISCORD_WEBHOOK;
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);

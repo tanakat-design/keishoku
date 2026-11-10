@@ -489,8 +489,12 @@ function methodLabel(m) {
 function deviceId() { let d = LS.get('kDevice', ''); if (!d) { d = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); LS.set('kDevice', d); } return d; }
 function orderHtml() {
   const os = (S.day && S.day.orders) || [];
-  const open = S.day && S.day.orderOpen;
-  const head = `<div class="notice ${open ? 'info' : 'warn'}">${open ? '卓上からの注文を受け付けています。' : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>`;
+  const d = S.day || {};
+  const open = !!d.orderOpenNow;          // 受付中で、かつ受付時間内。実際に届くかどうか
+  const head = `<div class="notice ${open ? 'info' : 'warn'}">${
+    open ? '卓上からの注文を受け付けています。'
+      : d.orderOpen ? `いまは受付時間外です（${esc(d.orderHours || '')}）。注文は届きません。`
+      : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>`;
   if (!os.length) return head + '<div class="card empty">未対応の注文はありません</div>';
   const byId = [];
   os.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, at: o.at, lines: [] }); g.lines.push(o); });
@@ -689,12 +693,12 @@ async function setActive(i, on) {
 const ORDER_BASE = 'https://tanakat-design.github.io/keishoku/order.html';
 async function ordT(i) {
   const t = S.admin.list[i];
-  S.ord = { id: t.id, name: t.name, tables: null, open: false, hours: '', token: '', busy: false, spec: null, preview: null };
+  S.ord = { id: t.id, name: t.name, tables: null, open: false, openNow: false, hoursOk: true, hours: '', token: '', busy: false, spec: null, preview: null };
   S.view = 'adminOrd'; render();
   loadQrLib();
   // 待っている間に別の大会の注文設定を開いていたら、その画面に前の大会の内容を入れない
   const cur = () => S.view === 'adminOrd' && S.ord && S.ord.id === t.id;
-  try { const r = await call('adminTables', S.admin.pin, t.id); if (!cur()) return; S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; }
+  try { const r = await call('adminTables', S.admin.pin, t.id); if (!cur()) return; S.ord.tables = r.tables; S.ord.open = r.orderOpen; S.ord.openNow = r.openNow; S.ord.hoursOk = r.hoursOk !== false; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; }
   catch (e) { if (!cur()) return; toast(netMsg(e)); S.ord.tables = []; }
   render();
 }
@@ -723,11 +727,12 @@ function renderAdminOrd() {
   const tbs = o.tables || [];
   app.innerHTML = `<div class="header"><h1>注文設定</h1><button class="link" onclick="S.view='adminList';render()">戻る</button></div>
     <div class="card"><div style="font-weight:700">${esc(o.name)}</div>
-      <div class="small" style="margin-top:4px">卓ごとのQRコードをテーブルに置くと、プレイヤーが席から軽食を注文できます。注文はスタッフ画面の「注文」タブに出ます。注文は在庫を減らしません。品切れのときは取り消してください。</div>
+      <div class="small" style="margin-top:4px">注文用QRをテーブルに置くと、プレイヤーが席から軽食を注文できます。注文はスタッフ画面の「注文」タブに出ます。注文は在庫を減らしません。品切れのときは取り消してください。</div>
       <div class="popctl" style="margin-top:10px">
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open ? 'false' : 'true'})">${o.open ? '受付を停止する' : '受付を開始する'}</button>
-        <span class="small">いまは<b>${o.open ? '受付中' : '停止中'}</b></span>
+        <span class="small">いまは<b>${o.open ? '受付中' : '停止中'}</b>${o.open && !o.openNow ? '（ただし受付時間外。注文は届きません）' : ''}</span>
       </div>
+      ${!o.hoursOk ? '<div class="notice warn" style="margin-top:8px">受付時間の書き方が正しくありません。このままでは受付中でも注文が全部弾かれます。<b>11:00-23:00</b> の形で入れ直してください（深夜までなら <b>10:00-28:00</b>）。</div>' : ''}
       <div class="popctl" style="margin-top:8px"><span class="small">受付時間</span><input id="ordH" value="${esc(o.hours)}" placeholder="例：11:00-23:00（空なら制限なし）" style="width:220px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open})">保存</button></div>
     </div>
     ${o.token ? `<div class="card"><div style="font-weight:700">注文用QR（この大会で1枚）</div>
@@ -759,7 +764,7 @@ function ordSame(id) { return S.view === 'adminOrd' && S.ord && S.ord.id === id;
 async function ordOpen(open) {
   const h = document.getElementById('ordH'), id = S.ord.id;
   S.ord.busy = true; render();
-  try { const r = await call('adminOrderOpen', S.admin.pin, id, !!open, h ? h.value.trim() : S.ord.hours); if (!ordSame(id)) return; S.ord.open = r.orderOpen; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; toast('保存しました'); }
+  try { const r = await call('adminOrderOpen', S.admin.pin, id, !!open, h ? h.value.trim() : S.ord.hours); if (!ordSame(id)) return; S.ord.open = r.orderOpen; S.ord.openNow = r.openNow; S.ord.hoursOk = r.hoursOk !== false; S.ord.hours = r.orderHours; S.ord.token = r.orderToken; toast('保存しました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
