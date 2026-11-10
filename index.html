@@ -702,6 +702,32 @@ async function ordT(i) {
   catch (e) { if (!cur()) return; toast(netMsg(e)); S.ord.tables = []; }
   render();
 }
+/** 受付時間が「その時刻」を含むか。GAS の inHours_ と同じ規則（28:00＝翌4時） */
+function ordCovers(hours, hm) {
+  const s = String(hours || '').trim();
+  if (!s) return true;                       // 空欄は制限なし
+  const p = s.split('-');
+  if (p.length !== 2) return false;
+  const a = ordHM(p[0]), b = ordHM(p[1]);
+  if (!a || !b) return false;
+  const wrap = a.over === b.over ? a.hm > b.hm : b.over;
+  return wrap ? (hm >= a.hm || hm <= b.hm) : (hm >= a.hm && hm <= b.hm);
+}
+function ordHM(v) {
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m || +m[1] > 47 || +m[2] > 59) return null;
+  return { hm: String(+m[1] % 24).padStart(2, '0') + ':' + m[2], over: +m[1] >= 24 };
+}
+/** 受付時間を日本語にする。書いた本人が、深夜に止まることに気づけるようにする */
+function ordHoursText(hours) {
+  const s = String(hours || '').trim();
+  if (!s) return '時間の制限なし。受付中なら夜中でも受け付ける。';
+  const p = s.split('-');
+  const a = p.length === 2 && ordHM(p[0]), b = p.length === 2 && ordHM(p[1]);
+  if (!a || !b) return '';
+  const txt = (a.over ? '翌' : '') + a.hm + ' から ' + (b.over ? '翌' : '') + b.hm + ' まで受け付ける。';
+  return txt + (ordCovers(s, '02:00') ? '' : ' <b>0時すぎは受け付けない。</b>深夜も受けるなら <b>10:00-28:00</b> のように24時を超えて書く（28:00＝翌4時）。空にすれば制限なし。');
+}
 // QRは大会に1枚。卓と席はプレイヤーが選ぶ
 function ordUrl() { return ORDER_BASE + '?t=' + encodeURIComponent(S.ord.id) + '&k=' + encodeURIComponent(S.ord.token); }
 /** QRの画像を作る小さなライブラリを、この画面を開いたときだけ読む。読めなくてもURLは使える */
@@ -732,8 +758,9 @@ function renderAdminOrd() {
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open ? 'false' : 'true'})">${o.open ? '受付を停止する' : '受付を開始する'}</button>
         <span class="small">いまは<b>${o.open ? '受付中' : '停止中'}</b>${o.open && !o.openNow ? '（ただし受付時間外。注文は届きません）' : ''}</span>
       </div>
-      ${!o.hoursOk ? '<div class="notice warn" style="margin-top:8px">受付時間の書き方が正しくありません。このままでは受付中でも注文が全部弾かれます。<b>11:00-23:00</b> の形で入れ直してください（深夜までなら <b>10:00-28:00</b>）。</div>' : ''}
-      <div class="popctl" style="margin-top:8px"><span class="small">受付時間</span><input id="ordH" value="${esc(o.hours)}" placeholder="例：11:00-23:00（空なら制限なし）" style="width:220px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open})">保存</button></div>
+      ${!o.hoursOk ? '<div class="notice warn" style="margin-top:8px">受付時間の書き方が正しくありません。このままでは受付中でも注文が全部弾かれます。<b>10:00-28:00</b> の形で入れ直してください（28:00＝翌4時）。空にすれば制限なしです。</div>' : ''}
+      <div class="popctl" style="margin-top:8px"><span class="small">受付時間</span><input id="ordH" value="${esc(o.hours)}" placeholder="例：10:00-28:00（空なら制限なし）" style="width:220px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordOpen(${o.open})">保存</button></div>
+      ${o.hoursOk ? `<div class="small" style="margin-top:4px">${ordHoursText(o.hours)}</div>` : ''}
     </div>
     ${o.token ? `<div class="card"><div style="font-weight:700">注文用QR（この大会で1枚）</div>
       <div class="small" style="margin-top:4px">全部のテーブルに同じものを置きます。プレイヤーが読み取ってからテーブル番号と席番号を選びます。</div>
