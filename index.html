@@ -56,9 +56,13 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 #alerts{position:fixed;left:0;right:0;top:0;z-index:20}
 #alerts .al{display:flex;align-items:flex-start;gap:10px;background:#b3261e;color:#fff;padding:12px 14px;font-size:15px;line-height:1.45;border-bottom:1px solid rgba(255,255,255,.3)}
 #alerts .al.ord{background:#1a73e8}
+/* 賞味期限の常時バナー。閉じるボタンを出さないので、対応するまで消えない */
+#alerts .al.soon{background:#f9ab00;color:#202124;font-weight:700}
+#alerts .al.over{background:#b3261e;color:#fff;font-weight:700}
 #alerts .al .tx{flex:1;cursor:pointer}
 #alerts .al button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer;white-space:nowrap}
-body.has-al .wrap{padding-top:64px}
+/* バナーの本数で高さが変わるので、実測した値で本文を押し下げる */
+body.has-al .wrap{padding-top:var(--altop,64px)}
 .hidden{display:none!important}
 .irow{display:flex;gap:8px;margin-top:8px}
 .irow .iname{flex:1;min-width:0}
@@ -172,10 +176,16 @@ function closeAlert(id) { AL.list = AL.list.filter(a => a.id !== id); renderAler
 function goAlert(id) { const a = AL.list.find(x => x.id === id); if (a && a.tab) pickTab(a.tab); closeAlert(id); }
 function renderAlerts() {
   const box = document.getElementById('alerts');
-  box.innerHTML = AL.list.map(a => `<div class="al ${a.kind}"><div class="tx" onclick="goAlert('${esc(a.id)}')">${esc(a.text)}</div><button onclick="closeAlert('${esc(a.id)}')">閉じる</button></div>`).join('');
-  document.body.classList.toggle('has-al', AL.list.length > 0);
+  const bars = expBars();   // 常時表示。閉じるボタンは出さない
+  box.innerHTML =
+    bars.map(b => `<div class="al ${b.cls}"><div class="tx" onclick="pickTab('close')">${esc(b.text)}</div></div>`).join('') +
+    AL.list.map(a => `<div class="al ${a.kind}"><div class="tx" onclick="goAlert('${esc(a.id)}')">${esc(a.text)}</div><button onclick="closeAlert('${esc(a.id)}')">閉じる</button></div>`).join('');
+  const n = AL.list.length + bars.length;
+  document.body.classList.toggle('has-al', n > 0);
+  // 本数で高さが変わる。固定値だと本文がバナーの下に隠れる
+  document.documentElement.style.setProperty('--altop', (box.offsetHeight || 0) + 'px');
   const base = '軽食 在庫管理';
-  document.title = AL.list.length ? '(' + AL.list.length + ') ' + base : base;
+  document.title = n ? '(' + n + ') ' + base : base;
 }
 // Apps Script の公開URL（外部に置いた画面からはここへ送信する）
 const API_URL = 'https://script.google.com/macros/s/AKfycbzCLMde4qTOdRf06XvaUvqnHq3iKx6n3T_NXuQj_73kWVgeTVVCr8uoy8agzA7cvcSlNw/exec';
@@ -405,30 +415,54 @@ function dueCount() { return S.day ? groupByReceipt(S.day.items).filter(g => exp
  * 期限の EXP_WARN_MIN 分前になったら受取ごとに1回だけ知らせる。
  * 出した記録のキーは 大会ID|開催日|店舗|受取時刻|賞味期限。賞味期限を直すとキーが変わるので出し直す。
  * 20分前を過ぎてから画面を開いた場合も、期限前なら1回出す。端末ごとに記録するので、複数の端末ではそれぞれ鳴る。 */
-const EXP_WARN_MIN = 20;
+const EXP_WARN_MIN = 30;
 // localStorage が使えない端末でも、開いている間は出し直さないように記憶を持つ
 const expMem = {};
 function expNoted() { const o = LS.get('kExpNoted', {}); const base = o && typeof o === 'object' && !Array.isArray(o) ? o : {}; Object.keys(expMem).forEach(k => { base[k] = expMem[k]; }); return base; }
 function pruneExpNoted(o) { const lim = Date.now() - 2 * 864e5; let ch = false; Object.keys(o).forEach(k => { if (!(o[k] > lim)) { delete o[k]; ch = true; } }); if (ch) LS.set('kExpNoted', o); return o; }
+/** 受取ごとに、まだ対応していない品目と残り時間を出す。バナーと音の両方がこれを使う */
+function expLive() {
+  if (!S.day || !S.date) return [];
+  const pend = pendingOut(), out = [];
+  groupByReceipt(S.day.items).forEach(g => {
+    const d = parseExp(g.exp); if (!d) return;                 // 賞味期限が未設定なら何も出せない
+    const live = g.list.filter(([it]) => !it.soldOut && !pend.has(it.name) && it.remain == null);
+    if (!live.length) return;                                  // 在庫切れ・入力済みだけなら知らせない
+    const names = live.map(([it]) => baseName(it.name));
+    out.push({
+      g: g, ms: d - Date.now(),
+      label: names.length === 1 ? names[0] : names.slice(0, 2).join('・') + ' ほか' + (names.length - 2) + '品目',
+    });
+  });
+  return out;
+}
+/** 画面の上に出しっぱなしにするバナー。閉じられないので、対応するまで必ず目に入る。
+ * AL.list と違って覚えておかず、毎回いまの状態から作り直す。だから期限切れ数を入れた瞬間に消える */
+function expBars() {
+  if (S.view !== 'main') return [];
+  return expLive()
+    .filter(x => x.ms <= EXP_WARN_MIN * 60000)
+    .sort((a, b) => a.ms - b.ms)                               // 切れたものを上に出す
+    .map(x => x.ms <= 0
+      ? { cls: 'over', text: x.label + ' が期限切れになりました。' }
+      : { cls: 'soon', text: 'あと' + Math.ceil(x.ms / 60000) + '分で ' + x.label + ' が期限切れです' });
+}
+/* 音と振動は受取ごとに1回だけ。バナーは出しっぱなしなので、鳴らすのは気づかせる最初の一度でよい */
 function checkExpiry() {
   if (S.view !== 'main' || !S.day || !S.session || !S.date) return;
   const noted = pruneExpNoted(expNoted());
-  const pend = pendingOut();
   let changed = false;
-  groupByReceipt(S.day.items).forEach(g => {
-    const d = parseExp(g.exp); if (!d) return;
-    const ms = d - Date.now();
-    if (ms <= 0 || ms > EXP_WARN_MIN * 60000) return;          // 期限切れ後と、まだ先のものは出さない（残り1分未満も取りこぼさない）
-    const live = g.list.filter(([it]) => !it.soldOut && !pend.has(it.name) && it.remain == null);
-    if (!live.length) return;                                  // 在庫切れ・入力済みだけなら知らせない
-    const key = S.session.tid + '|' + S.date + '|' + g.store + '|' + g.recv + '|' + g.exp;
-    if (noted[key]) return;
+  expLive().forEach(x => {
+    const g = x.g;
+    const base = S.session.tid + '|' + S.date + '|' + g.store + '|' + g.recv + '|' + g.exp;
+    // 予告と期限切れで別に鳴らす。予告を聞き逃しても、切れた時点でもう一度気づける
+    const key = x.ms <= 0 ? 'over:' + base : (x.ms <= EXP_WARN_MIN * 60000 ? 'soon:' + base : '');
+    if (!key || noted[key]) return;
     noted[key] = expMem[key] = Date.now(); changed = true;
-    const names = live.map(([it]) => baseName(it.name));
-    const label = names.length === 1 ? names[0] : names.slice(0, 2).join('・') + ' ほか' + (names.length - 2) + '品目';
-    alertBar('exp:' + key, label + ' が期限切れになります。', 'close');
+    beep(x.ms <= 0 ? 4 : 2); buzz();
   });
   if (changed) LS.set('kExpNoted', noted);
+  renderAlerts();                                              // 残り分数を進める
 }
 /** 最終取得からの経過。つながっていないことに気づけるように常に出す */
 function freshText() {
@@ -1282,7 +1316,10 @@ function importSheet() {
 // 注文は見落とせないので、どのタブを開いていても30秒ごとに取り直す
 setInterval(() => { if (S.view === 'main' && !S.busy && document.visibilityState === 'visible') loadDay(true); }, 30000);
 setInterval(() => { const a = document.activeElement; if (S.view === 'main' && !S.busy && !(a && a.tagName === 'INPUT')) render(); }, 60000);
-setInterval(checkExpiry, 30000); // 賞味期限の予告。画面を見ていなくても判定する
+setInterval(checkExpiry, 10000); // 賞味期限の判定とバナーの残り分数。画面を見ていなくても進む
+// 幅が変わるとバナーの折り返し行数が変わる。測り直さないと本文が隠れたままになる
+let alResizeT = null;
+window.addEventListener('resize', () => { clearTimeout(alResizeT); alResizeT = setTimeout(renderAlerts, 200); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'main') { flush(); loadDay(true); } });
 
 init();
