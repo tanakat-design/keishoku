@@ -3,7 +3,7 @@
  *
  * シート構成
  *   大会         : 大会ID / 大会名 / スタッフPIN / 有効 / 更新日時
- *   在庫設定     : 大会ID / 大会名 / 開催日 / 表示順 / 品目 / 在庫数 / 店舗 / 受取時間 / 賞味期限 / 受取方法 / 住所 / 電話   ← 開催日ごとに設定
+ *   在庫設定     : 大会ID / 大会名 / 開催日 / 表示順 / 品目 / 在庫数 / 店舗 / 受取時間 / 賞味期限 / 受取方法 / 住所 / 電話 / 支払方法 / 支払金額   ← 開催日ごとに設定
  *   在庫切れログ : 記録日時 / 大会ID / 大会名 / 開催日 / 品目 / 入力者 / 状態 / 取消日時 / 取消者 / リクエストID / 在庫切れ時刻 / 備考
  *   日次残数     : 大会ID / 大会名 / 開催日 / 品目 / 在庫数 / 期限切れ数 / 消費数 / 在庫切れ時刻 / 入力者 / 記録日時
  */
@@ -13,7 +13,7 @@ const TZ = 'Asia/Tokyo';
 const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち' };
 const HEAD = {
   [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間', '注文トークン'],
-  [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話'],
+  [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話', '支払方法', '支払金額'],
   [SH.LOG]: ['記録日時', '大会ID', '大会名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['大会ID', '大会名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
   [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。大会をまたいで使い回す
@@ -23,7 +23,8 @@ const HEAD = {
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
 const TEXT_COLS = {
-  [SH.TOURN]: [1, 3, 7, 8], [SH.STOCK]: [1, 3, 8, 9, 12], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
+  // 支払金額は「38,000円」「７，４８０円」のように書かれるので数値にせず文字のまま持つ
+  [SH.TOURN]: [1, 3, 7, 8], [SH.STOCK]: [1, 3, 8, 9, 12, 13, 14], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
   [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1],
 };
 const TIME_COLS = {
@@ -282,7 +283,7 @@ function adminSave(pin, f) {
         if (recv && !hm2_(recv)) throw new Error(date + ' の「' + n + '」の受取時間が正しくありません');
         const exp = str_(i.exp).replace('T', ' ');
         if (exp && !validDT_(exp)) throw new Error(date + ' の「' + n + '」の賞味期限が正しくありません');
-        stockRows.push([id, name, date, k + 1, n, s, str_(i.store), recv, exp, str_(i.method), str_(i.addr), str_(i.tel)]);
+        stockRows.push([id, name, date, k + 1, n, s, str_(i.store), recv, exp, str_(i.method), str_(i.addr), str_(i.tel), str_(i.pay), str_(i.amt)]);
       });
     });
     // 注文受付・受付時間・注文トークンは大会編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、大会一覧が消える
@@ -1103,7 +1104,7 @@ function state_(t, date) {
     date: date,
     items: items.map(function (it) {
       return {
-        name: it.name, stock: it.stock, store: it.store, recv: it.recv, exp: it.exp, method: it.method, addr: it.addr, tel: it.tel,
+        name: it.name, stock: it.stock, store: it.store, recv: it.recv, exp: it.exp, method: it.method, addr: it.addr, tel: it.tel, pay: it.pay, amt: it.amt,
         soldOut: out[it.name] || null,
         remain: Object.prototype.hasOwnProperty.call(remain, it.name) ? remain[it.name] : null,
       };
@@ -1128,7 +1129,7 @@ function config_(tid) {
     const d = ds_(r[2]);
     (map[d] = map[d] || []).push({ name: str_(r[4]), stock: Number(r[5]) || 0, order: Number(r[3]) || 0,
       store: str_(r[6]), recv: r[7] instanceof Date ? hm_(r[7]) : str_(r[7]), exp: r[8] instanceof Date ? Utilities.formatDate(r[8], TZ, 'yyyy-MM-dd HH:mm') : str_(r[8]),
-      method: str_(r[9]), addr: str_(r[10]), tel: str_(r[11]) });
+      method: str_(r[9]), addr: str_(r[10]), tel: str_(r[11]), pay: str_(r[12]), amt: str_(r[13]) });
   });
   Object.keys(map).forEach(function (d) { map[d].sort(function (a, b) { return a.order - b.order; }); });
   return map;

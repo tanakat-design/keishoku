@@ -128,6 +128,9 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .lrow label{margin:0;font-size:13px;font-weight:700;width:6.5em;flex:none}
 .lrow input{flex:1;min-width:0;width:auto;box-sizing:border-box;padding:8px 10px;margin:0;-webkit-appearance:none;appearance:none;min-height:40px;background:#fff}
 .rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
+/* 支払いは現場で確かめる項目なので、他の情報より目立たせる */
+.rcv .pay{font-size:14px;margin-top:8px;padding:6px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f0d890}
+.rcv .pay b{font-size:16px}
 .rcv.past{opacity:.6}
 </style>
 </head>
@@ -406,7 +409,7 @@ function groupByReceipt(items) {
   items.forEach((it, i) => {
     const key = recvOf(it) + '|' + (it.store || '') + '|' + (it.exp || '');
     let x = g.find(y => y.key === key);
-    if (!x) g.push(x = { key, recv: recvOf(it), store: it.store || '', exp: it.exp || '', method: it.method || '', addr: it.addr || '', tel: it.tel || '', list: [] });
+    if (!x) g.push(x = { key, recv: recvOf(it), store: it.store || '', exp: it.exp || '', method: it.method || '', addr: it.addr || '', tel: it.tel || '', pay: it.pay || '', amt: it.amt || '', list: [] });
     x.list.push([it, i]);
   });
   return g.sort((a, b) => { const ea = parseExp(a.exp), eb = parseExp(b.exp); return (ea ? ea.getTime() : 9e15) - (eb ? eb.getTime() : 9e15) || toMin(a.recv) - toMin(b.recv); });
@@ -634,7 +637,7 @@ function recvHtml() {
   const d = S.day;
   if (!d.items.length) return '<div class="card empty">この日の軽食が設定されていません</div>';
   const groups = [];
-  groupByReceipt(d.items).forEach(x => { const y = groups.find(z => z.recv === x.recv && z.store === x.store); if (y) { y.list.push(...x.list); if (!y.method) y.method = x.method; if (!y.addr) y.addr = x.addr; if (!y.tel) y.tel = x.tel; } else groups.push({ ...x, list: [...x.list] }); });
+  groupByReceipt(d.items).forEach(x => { const y = groups.find(z => z.recv === x.recv && z.store === x.store); if (y) { y.list.push(...x.list); if (!y.method) y.method = x.method; if (!y.addr) y.addr = x.addr; if (!y.tel) y.tel = x.tel; if (!y.pay) y.pay = x.pay; if (!y.amt) y.amt = x.amt; } else groups.push({ ...x, list: [...x.list] }); });
   groups.sort((a, b) => toMin(a.recv) - toMin(b.recv));
   groups.forEach(g => { const es = [...new Set(g.list.map(([it]) => it.exp || ''))]; g.mixed = es.length > 1; g.exp = es.length === 1 ? es[0] : ''; });
   const nowMin = (() => { const n = new Date(); return md(S.date) === md(S.today) ? n.getHours() * 60 + n.getMinutes() : -1; })();
@@ -647,6 +650,7 @@ function recvHtml() {
       <div class="top"><span class="tm">${esc(g.recv || '--:--')}</span><span class="st">${esc(g.store || '店舗未設定')}</span></div>
       ${m.label ? `<span class="mth ${m.label === '配達' ? 'dlv' : ''}">${esc(m.label)}</span>${m.note ? `<span class="note">${esc(m.note)}</span>` : ''}` : ''}
       ${g.addr || tel ? `<div class="info">${g.addr ? '住所：' + esc(g.addr) + map : ''}${g.addr && tel ? '<br>' : ''}${tel ? '電話：' + tel : ''}</div>` : ''}
+      ${g.pay || g.amt ? `<div class="pay">支払：${esc(g.pay || '未設定')}${g.amt ? '　<b>' + esc(g.amt) + '</b>' : ''}</div>` : ''}
       <div class="its">${g.list.map(([it]) => `<span>${esc(baseName(it.name))} ${it.stock}${g.mixed && it.exp ? `<small>（期限 ${esc(fmtExp(it.exp))}）</small>` : ''}</span>`).join('')}</div>
       ${g.exp ? `<div class="exp">賞味期限 ${esc(fmtExp(g.exp))}</div>` : ''}
     </div>`;
@@ -1062,14 +1066,16 @@ function shrinkImage(file) {
   });
 }
 /* 管理画面は「受取（店舗×受取時間×賞味期限）」単位で品目をまとめて編集する */
-function newGroup() { return { store: '', recv: '', exp: '', method: '', addr: '', tel: '', items: [{ name: '', stock: '' }] }; }
+function newGroup() { return { store: '', recv: '', exp: '', method: '', addr: '', tel: '', pay: '', amt: '', items: [{ name: '', stock: '' }] }; }
 function toForm(t) {
   return { id: t.id, name: t.name, staffPin: t.staffPin, active: t.active, days: t.days.map(d => {
     const groups = [];
     d.items.forEach(it => {
       const recv = it.recv || slotOf(it.name), exp = String(it.exp || '').replace(' ', 'T'), store = it.store || '';
-      let g = groups.find(x => x.store === store && x.recv === recv && x.exp === exp);
-      if (!g) groups.push(g = { store, recv, exp, method: it.method || '', addr: it.addr || '', tel: it.tel || '', items: [] });
+      // 支払いもまとめの条件に入れる。違う支払いの行を1つにすると、保存し直したときに片方が消える
+      const pay = it.pay || '', amt = it.amt || '';
+      let g = groups.find(x => x.store === store && x.recv === recv && x.exp === exp && x.pay === pay && x.amt === amt);
+      if (!g) groups.push(g = { store, recv, exp, method: it.method || '', addr: it.addr || '', tel: it.tel || '', pay, amt, items: [] });
       const nm = recv && String(it.name).endsWith('（' + recv + '）') ? it.name.slice(0, -(recv.length + 2)) : it.name;
       g.items.push({ name: nm, stock: it.stock });
     });
@@ -1079,7 +1085,7 @@ function toForm(t) {
 function fromForm(f) {
   return { id: f.id, name: f.name, staffPin: f.staffPin, active: f.active, days: f.days.map(d => {
     const flat = [];
-    d.groups.forEach(g => g.items.forEach(it => { if (String(it.name).trim() || String(it.stock).trim()) flat.push({ base: String(it.name).trim(), stock: it.stock, store: g.store.trim(), recv: g.recv, exp: g.exp, method: String(g.method || '').trim(), addr: String(g.addr || '').trim(), tel: String(g.tel || '').trim() }); }));
+    d.groups.forEach(g => g.items.forEach(it => { if (String(it.name).trim() || String(it.stock).trim()) flat.push({ base: String(it.name).trim(), stock: it.stock, store: g.store.trim(), recv: g.recv, exp: g.exp, method: String(g.method || '').trim(), addr: String(g.addr || '').trim(), tel: String(g.tel || '').trim(), pay: String(g.pay || '').trim(), amt: String(g.amt || '').trim() }); }));
     const cnt = k => flat.filter(x => k(x)).length;
     flat.forEach(x => {
       let n = x.base;
@@ -1091,7 +1097,7 @@ function fromForm(f) {
     });
     // 同じ受取で品目別に賞味期限が違い、なお重複する場合は期限時刻を付ける
     flat.forEach(x => { if (flat.filter(y => y.name === x.name).length > 1 && x.exp) x.name += '（' + fmtExp(x.exp) + '期限）'; });
-    return { date: d.date, items: flat.map(x => ({ name: x.name, stock: x.stock, store: x.store, recv: x.recv, exp: x.exp, method: x.method, addr: x.addr, tel: x.tel })) };
+    return { date: d.date, items: flat.map(x => ({ name: x.name, stock: x.stock, store: x.store, recv: x.recv, exp: x.exp, method: x.method, addr: x.addr, tel: x.tel, pay: x.pay, amt: x.amt })) };
   }) };
 }
 function editT(i) {
@@ -1124,6 +1130,8 @@ function renderAdminEdit() {
           <div class="full"><label>受取方法</label><input class="gMethod" value="${esc(g.method)}" placeholder="例：店舗受け取り／配達"></div>
           <div class="full"><label>住所（店舗受取の場合）</label><input class="gAddr" value="${esc(g.addr)}" placeholder="例：大阪市北区中崎1-2-3"></div>
           <div class="full"><label>電話</label><input class="gTel" type="tel" value="${esc(g.tel)}" placeholder="例：06-1234-5678"></div>
+          <div><label>支払方法</label><input class="gPay" value="${esc(g.pay || '')}" placeholder="例：請求書払い"></div>
+          <div><label>支払金額</label><input class="gAmt" value="${esc(g.amt || '')}" placeholder="例：38,000円"></div>
         </div>
         <div class="small" style="margin-top:10px">品目名 ／ 在庫数</div>` +
         g.items.map((it, ii) => `<div class="irow"><input class="iname" value="${esc(it.name)}" placeholder="品目名"><input class="istock" type="number" inputmode="numeric" min="0" step="1" value="${esc(it.stock)}" placeholder="在庫数"><button class="btn-sub" onclick="fAct('delItem',${di},${gi},${ii})">×</button></div>`).join('') +
@@ -1140,6 +1148,7 @@ function readForm() {
     groups: [...el.querySelectorAll('[data-gi]')].map(g => ({
       store: g.querySelector('.gStore').value, recv: g.querySelector('.gRecv').value, exp: g.querySelector('.gExp').value,
       method: g.querySelector('.gMethod').value, addr: g.querySelector('.gAddr').value, tel: g.querySelector('.gTel').value,
+      pay: g.querySelector('.gPay').value, amt: g.querySelector('.gAmt').value,
       items: [...g.querySelectorAll('.irow')].map(r => ({ name: r.querySelector('.iname').value, stock: r.querySelector('.istock').value })),
     })),
   }));
@@ -1205,6 +1214,7 @@ function parseHM(v) {
 function parseExpCell(v, date, recv, today) {
   const t = toHalf(v).trim();
   if (/^(当日|本日|その日)(中|いっぱい)?$/.test(t)) return date + 'T23:59';
+  if (/^(翌日|次の日)(中|いっぱい)?$/.test(t)) return addDays(date, 1) + 'T23:59';
   let m = t.match(/^(?:(\d{4})[\/-])?(\d{1,2})[\/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (m) {
     const d = m[1] ? m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0') : mdToIso(m[2] + '/' + m[3], today);
@@ -1247,13 +1257,16 @@ function importKeishoku(text, today, split, expH) {
   const inParen = s => { const m = s.match(/[（(]([^）)]*)[）)]/); return m && !/新規/.test(m[1]) ? m[1] : shortStore(s); };
   const isRecvLabel = s => /^受取(時間|時刻)?$|^受け取り(時間)?$/.test(s);
   const isExpLabel = s => /^(賞味|消費)?期限$/.test(s);
+  // 受取枠の列に並ぶ「支払い方法」「支払金額」行。金額は「７，４８０円」のように全角で入ることがある
+  const isPayLabel = s => /^支払い?方法$/.test(s);
+  const isAmtLabel = s => /^支払い?(金額|額)$/.test(s);
   const expTargets = s => { const m = s.match(/^(?:賞味|消費)?期限[（(:：](.+?)[）)]?$/); return m ? m[1].split(/[、,・\/／]/).map(x => x.trim()).filter(Boolean) : null; };
   // 店舗×受取枠（列）ごとに集計する
   const cells = new Map(); let store = null; const bad = [];
   const stInfo = {}; // 店舗ごとの受取時間（見出し→時刻）・賞味期限（G列など）・品目別の期限メモ
   const info = {}; // 店舗ごとの受取方法・住所・電話（店名の下のB列）
   const isTel = t => /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/.test(t.replace(/[\s（）()]/g, ''));
-  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) { const si = stInfo[st] || {}; cells.set(k, { rawStore: st, date: s.date, recv: s.time || (si.times || {})[s.label] || '', label: s.label, expRaw: '', itemExp: {}, items: [] }); } return cells.get(k); };
+  const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) { const si = stInfo[st] || {}; cells.set(k, { rawStore: st, date: s.date, recv: s.time || (si.times || {})[s.label] || '', label: s.label, expRaw: '', itemExp: {}, pay: '', amt: '', items: [] }); } return cells.get(k); };
   const noteRe = /^(.+?)(?:のみ|だけ)?(?:は|[:：]|\s)*(当日中?|本日中|その日中|\d+(?:\.\d+)?\s*時間|(?:\d{1,2}[\/／]\d{1,2}\s+)?\d{1,2}[:：]\d{2}(?::\d{2})?)$/;
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
@@ -1271,17 +1284,29 @@ function importKeishoku(text, today, split, expH) {
     if (!store) continue;
     const b = (r[1] || '').replace(/\u3000/g, ' ').trim();
     if (b && b !== store) {
-      const st = info[store] = info[store] || { method: '', addr: '', tel: '' };
+      const st = info[store] = info[store] || { method: '', addr: '', tel: '', pay: '' };
       const am = b.match(/^(?:住所|所在地|受取場所|受け取り場所)\s*[:：]?\s*(.+)$/);
       if (am) st.addr = am[1].trim();
       else if (isTel(b)) st.tel = b;
+      // B列にも支払い方法が書いてある（「13日カード払い」「請求書払い」「支払い済み」など）。受取枠の行が無いときの控えに使う
+      else if (/払い|支払|決済|請求|カード|現金|振込/.test(b) && !st.pay) st.pay = b;
       else if (/配達|デリバリー|配送|出前|店舗|受け?取|テイクアウト|持ち帰/.test(b) && !st.method) st.method = b;
     }
     slots.forEach(s => {
       const name = (r[s.col] || '').replace(/\s+/g, ''), raw = String(r[s.col + 1] || '').trim();
-      if (!name) return;
+      if (!name) {
+        // 数量だけあって品目名が空の行。黙って捨てるとその店舗がまるごと消える
+        const q = raw.replace(/,/g, '');
+        if (/^\d+$/.test(q) && +q > 0) {
+          const w = md(s.date) + ' ' + shortStore(store) + ' 品目名が空なのに数量「' + raw + '」がある';
+          if (!bad.includes(w)) bad.push(w);
+        }
+        return;
+      }
       if (isRecvLabel(name)) { if (!raw) return; const hm = parseHM(raw); if (hm) cellOf(store, s).recv = hm; else bad.push(md(s.date) + ' ' + shortStore(store) + ' 受取「' + raw + '」'); return; }
       if (isExpLabel(name)) { if (raw) cellOf(store, s).expRaw = raw; return; }
+      if (isPayLabel(name)) { if (raw) cellOf(store, s).pay = raw; return; }
+      if (isAmtLabel(name)) { if (raw) cellOf(store, s).amt = toHalf(raw).trim(); return; }
       const tg = expTargets(name);
       if (tg) { if (raw) tg.forEach(x => { cellOf(store, s).itemExp[x] = raw; }); return; }
       const qty = raw.replace(/,/g, '');
@@ -1321,10 +1346,13 @@ function importKeishoku(text, today, split, expH) {
     c.items.forEach(it => {
       const ie = own[it.raw], key = ie ? 'own:' + ie : 'base';
       let g = groups.find(x => x.rawStore === c.rawStore && x.key === key && (!split || x.recv === c.recv));
-      if (!g) { const si = info[c.rawStore] || {}; groups.push(g = { rawStore: c.rawStore, key, store: shortStore(c.rawStore), recv: c.recv, exp: ie || exp, method: si.method || '', addr: si.addr || '', tel: si.tel || '', items: [] }); }
+      if (!g) { const si = info[c.rawStore] || {}; groups.push(g = { rawStore: c.rawStore, key, store: shortStore(c.rawStore), recv: c.recv, exp: ie || exp, method: si.method || '', addr: si.addr || '', tel: si.tel || '', pay: c.pay || si.pay || '', amt: c.amt || '', items: [] }); }
       else {
         if (c.recv && (!g.recv || toMin(c.recv) < toMin(g.recv))) g.recv = c.recv;
         if (!ie && exp && (!g.exp || exp < g.exp)) g.exp = exp;
+        if (!g.pay && c.pay) g.pay = c.pay;
+        // 合算したときは金額を足さずに並べる。「38,000円」のような文字なので、足すと意味が変わる
+        if (c.amt && !g.amt.split('・').includes(c.amt)) g.amt = g.amt ? g.amt + '・' + c.amt : c.amt;
       }
       const e = g.items.find(x => x.name === it.name); if (e) e.stock += it.stock; else g.items.push({ name: it.name, stock: it.stock });
     });
@@ -1332,7 +1360,7 @@ function importKeishoku(text, today, split, expH) {
   const dates = Object.keys(days).sort();
   if (!dates.length) throw new Error('品目と個数を読み取れませんでした');
   // 合算のときも受取時間を残す（その日の最も早い受取時刻）。空にすると受取タブもPOPの「○:○○から販売」も出せなくなる。賞味期限も同じく最も早いものを残している
-  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: g.recv, exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, items: g.items })) }));
+  const result = dates.map(date => ({ date, groups: days[date].sort((a, b) => toMin(a.recv) - toMin(b.recv)).map(g => ({ store: g.store, recv: g.recv, exp: g.exp, method: g.method, addr: g.addr, tel: g.tel, pay: g.pay, amt: g.amt, items: g.items })) }));
   result.info = { expFromSheet, expFromHours, expBlank, expItem, recvAssumed, assumedStores: [...assumedStores], labelDef, bad };
   return result;
 }
