@@ -129,8 +129,15 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .lrow input{flex:1;min-width:0;width:auto;box-sizing:border-box;padding:8px 10px;margin:0;-webkit-appearance:none;appearance:none;min-height:40px;background:#fff}
 .rcv .exp{font-size:13px;color:var(--sub);margin-top:6px}
 /* 支払いは現場で確かめる項目なので、他の情報より目立たせる */
-.rcv .pay{font-size:14px;margin-top:8px;padding:6px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f0d890}
-.rcv .pay b{font-size:16px}
+.rcv .pay{font-size:14px;margin-top:8px;padding:8px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f0d890}
+.rcv .pay .r{display:flex;align-items:baseline;gap:10px}
+.rcv .pay .r+.r{margin-top:4px}
+/* 見出しの幅をそろえて、方法と金額が縦に並んで読めるようにする */
+.rcv .pay .r span{flex:0 0 4.5em;color:var(--sub);font-size:13px}
+.rcv .pay b{font-size:16px;word-break:break-all}
+.rcv .pay .amt{font-size:20px}
+/* 支払い無しは薄く。書いてある金額と見間違えないようにする */
+.rcv .pay .none{color:var(--sub);font-weight:600;font-size:15px}
 .rcv.past{opacity:.6}
 /* 受取済み。受け取ったものは一目で分かるように緑の枠にし、未受取だけが白く残るようにする */
 .rcv.got{border-color:#1e8e3e;background:#f3faf4}
@@ -674,7 +681,7 @@ function recvHtml() {
       <div class="top"><span class="tm">${esc(g.recv || '--:--')}</span><span class="st">${esc(g.store || '店舗未設定')}</span></div>
       ${m.label ? `<span class="mth ${m.label === '配達' ? 'dlv' : ''}">${esc(m.label)}</span>${m.note ? `<span class="note">${esc(m.note)}</span>` : ''}` : ''}
       ${g.addr || tel ? `<div class="info">${g.addr ? '住所：' + esc(g.addr) + map : ''}${g.addr && tel ? '<br>' : ''}${tel ? '電話：' + tel : ''}</div>` : ''}
-      ${g.pay || g.amt ? `<div class="pay">支払：${esc(g.pay || '未設定')}${g.amt ? '　<b>' + esc(g.amt) + '</b>' : ''}</div>` : ''}
+      <div class="pay"><div class="r"><span>支払方法</span><b class="${g.pay ? '' : 'none'}">${esc(g.pay || '支払い無し')}</b></div><div class="r"><span>支払金額</span><b class="${g.amt ? 'amt' : 'none'}">${esc(g.amt || '支払い無し')}</b></div></div>
       <div class="its">${g.list.map(([it]) => `<span>${esc(baseName(it.name))} ${it.stock}${g.mixed && it.exp ? `<small>（期限 ${esc(fmtExp(it.exp))}）</small>` : ''}</span>`).join('')}</div>
       ${g.exp ? `<div class="exp">賞味期限 ${esc(fmtExp(g.exp))}</div>` : ''}
       ${box}
