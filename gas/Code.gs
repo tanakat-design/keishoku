@@ -10,7 +10,7 @@
 
 const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
 const TZ = 'Asia/Tokyo';
-const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち' };
+const SH = { TOURN: '大会', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち', RECV: '受取記録' };
 const HEAD = {
   [SH.TOURN]: ['大会ID', '大会名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間', '注文トークン'],
   [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話', '支払方法', '支払金額'],
@@ -20,16 +20,18 @@ const HEAD = {
   [SH.TABLE]: ['大会ID', '卓番号', '席数', 'トークン', '有効', '更新日時'], // 卓上注文のQR。トークンを作り直すと過去のQRが一斉に失効する
   [SH.ORDER]: ['注文ID', '明細番号', '大会ID', '大会名', '開催日', '卓', '席', '品目', '個数', 'ドリチケ', '状態', '取消理由', '照会キー', 'リクエストID', '受付日時', '担当者', '担当端末', '担当日時', '完了日時', '操作履歴'],
   [SH.NOTIFY]: ['通知ID', '種別', '本文', '状態', '作成日時', '送信日時', '試行回数', 'エラー'], // 外部通知はロックの外で、ここを経由して送る
+  // 受取済みのチェック。店舗×受取時間ごとに1行だけ持つ（押し直すと上書き、取消すと行が消える）
+  [SH.RECV]: ['大会ID', '大会名', '開催日', '店舗', '受取時間', '状態', '受取日時', '担当者', '記録日時'],
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
 const TEXT_COLS = {
   // 支払金額は「38,000円」「７，４８０円」のように書かれるので数値にせず文字のまま持つ
   [SH.TOURN]: [1, 3, 7, 8], [SH.STOCK]: [1, 3, 8, 9, 12, 13, 14], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
-  [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1],
+  [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1], [SH.RECV]: [1, 3, 5],
 };
 const TIME_COLS = {
   [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10], [SH.POP]: [4],
-  [SH.TABLE]: [6], [SH.ORDER]: [15, 18, 19], [SH.NOTIFY]: [5, 6],
+  [SH.TABLE]: [6], [SH.ORDER]: [15, 18, 19], [SH.NOTIFY]: [5, 6], [SH.RECV]: [7, 9],
 };
 /* 注文の設定（必要なら変える） */
 const ORD = {
@@ -54,7 +56,7 @@ function doGet() {
 /** 外部に置いた画面（GitHub Pages など）からの API 呼び出し。本文は {"fn": 関数名, "args": [...]} の JSON */
 const API = {
   getTournaments: getTournaments, staffLogin: staffLogin, getDayState: getDayState,
-  markSoldOut: markSoldOut, cancelSoldOut: cancelSoldOut, submitClose: submitClose,
+  markSoldOut: markSoldOut, cancelSoldOut: cancelSoldOut, submitClose: submitClose, markReceived: markReceived,
   adminList: adminList, adminSave: adminSave, adminSetActive: adminSetActive,
   getPopState: getPopState, getPopImages: getPopImages, adminPopList: adminPopList, adminPopSave: adminPopSave,
   getOrderMenu: getOrderMenu, placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
@@ -233,6 +235,29 @@ function submitClose(tid, pin, date, entries, staff, clientAt) {
     if (!add.length) throw new Error('期限切れ数を1つ以上入力してください');
     const sent = new Set(add.map(function (r) { return r[3]; }));
     replace_(SH.CLOSE, function (r) { return str_(r[0]) === t.id && ds_(r[2]) === date && sent.has(str_(r[3])); }, add);
+    return state_(t, date);
+  });
+}
+
+/**
+ * 受取を「受取済み」にする。on が false なら取消。
+ * 店舗×受取時間ごとに1行だけ持つので、押し直すと担当者と時刻が上書きされ、取消すと行が消える。
+ * clientAt は端末でボタンを押した時刻（オフラインで溜めてから送っても、押した時刻で残す）。
+ * 在庫は動かさない。現物を受け取ったかどうかの記録だけで、在庫切れや期限切れとは別に持つ。
+ */
+function markReceived(tid, pin, date, store, recv, staff, on, clientAt) {
+  const t = staff_(tid, pin);
+  return withLock_(function () {
+    const st = str_(store), rc = str_(recv);
+    const items = config_(t.id)[date] || [];
+    // 設定にある受取だけ。打ち間違いや古い画面からの送信で、ありもしない受取の記録が増えないようにする
+    const ok = items.some(function (i) { return str_(i.store) === st && str_(i.recv) === rc; });
+    if (!ok) throw new Error('この日の受取にありません。画面を更新してください');
+    ensureSheet_(SH.RECV);
+    const add = on === false ? [] : [[t.id, t.name, date, st, rc, '受取済み', when_(clientAt), str_(staff), new Date()]];
+    replace_(SH.RECV, function (r) {
+      return str_(r[0]) === t.id && ds_(r[2]) === date && str_(r[3]) === st && rhm_(r[4]) === rc;
+    }, add);
     return state_(t, date);
   });
 }
@@ -1100,8 +1125,15 @@ function state_(t, date) {
       if (r[9] instanceof Date && (!closed || r[9] > closed.d)) closed = { d: r[9], by: str_(r[8]) };
     }
   });
+  // 受取済み。キーは 店舗|受取時間。シートが無い（setup() 前）ときは空で返し、画面は開けるようにする
+  const recvd = {};
+  rowsSoft_(SH.RECV).forEach(function (r) {
+    if (str_(r[0]) !== t.id || ds_(r[2]) !== date || str_(r[5]) !== '受取済み') return;
+    recvd[str_(r[3]) + '|' + rhm_(r[4])] = { at: r[6] instanceof Date ? hm_(r[6]) : str_(r[6]), by: str_(r[7]) };
+  });
   return {
     date: date,
+    received: recvd,
     items: items.map(function (it) {
       return {
         name: it.name, stock: it.stock, store: it.store, recv: it.recv, exp: it.exp, method: it.method, addr: it.addr, tel: it.tel, pay: it.pay, amt: it.amt,
@@ -1151,6 +1183,23 @@ function sheet_(name) {
   const sh = book_().getSheetByName(name);
   if (!sh) throw new Error('シート「' + name + '」がありません。メニュー「軽食アプリ → 初期設定」を実行してください');
   return sh;
+}
+
+/** シートが無くても落ちない。列を足した直後、setup() を実行する前でも画面が開けるようにする */
+function rowsSoft_(name) {
+  try { return rows_(name); } catch (e) { return []; }
+}
+
+/** シートが無ければ見出しと書式を付けて作る。setup() を忘れていても記録だけは残せる */
+function ensureSheet_(name) {
+  const book = book_();
+  if (book.getSheetByName(name)) return;
+  const sh = book.insertSheet(name);
+  const h = HEAD[name];
+  sh.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#f1f3f4');
+  sh.setFrozenRows(1);
+  (TEXT_COLS[name] || []).forEach(function (c) { sh.getRange(1, c, sh.getMaxRows(), 1).setNumberFormat('@'); });
+  (TIME_COLS[name] || []).forEach(function (c) { sh.getRange(2, c, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss'); });
 }
 
 function rows_(name) {
@@ -1204,5 +1253,7 @@ function book_() { return SpreadsheetApp.openById(SPREADSHEET_ID); }
 function str_(v) { return v == null ? '' : String(v).trim(); }
 function ds_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : str_(v); }
 function hm_(d) { return Utilities.formatDate(d, TZ, 'HH:mm'); }
+/** 受取時間のセルを 'HH:MM' に揃える。書式が時刻に戻っていても文字と比べられる */
+function rhm_(v) { return v instanceof Date ? hm_(v) : str_(v); }
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 function newPin_() { return String(Math.floor(100000 + Math.random() * 900000)); }

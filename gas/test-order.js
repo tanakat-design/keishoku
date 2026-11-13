@@ -74,7 +74,7 @@ const Logger = { last: '', log(m) { Logger.last = String(m); } };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify, markReceived };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -358,6 +358,35 @@ ok('Webhookが未設定なら理由を出す', (function () {
   return /DISCORD_WEBHOOK が未設定/.test(Logger.last);
 })(), Logger.last);
 delete PROPS.NOTIFY_KIND; delete PROPS.DISCORD_WEBHOOK;
+
+// 10) 受取済みのチェック（店舗×受取時間ごとに1行。押し直しても増えず、取消すと消える）
+console.log('');
+console.log('[受取済み]');
+(function () {
+  DB[X.SH.RECV] = [];
+  const st = X.markReceived('T1', '1234', today, 'テスト店', '07:00', '田中', true, Date.now());
+  ok('受取済みが state に入る', !!(st.received && st.received['テスト店|07:00']), JSON.stringify(st.received));
+  ok('担当者が残る', (st.received['テスト店|07:00'] || {}).by === '田中');
+  ok('シートは1行だけ', DB[X.SH.RECV].length === 1 && DB[X.SH.RECV][0][5] === '受取済み', 'rows=' + DB[X.SH.RECV].length);
+
+  X.markReceived('T1', '1234', today, 'テスト店', '07:00', '佐藤', true, Date.now());
+  ok('押し直しても増えず担当者が入れ替わる', DB[X.SH.RECV].length === 1 && DB[X.SH.RECV][0][7] === '佐藤', 'rows=' + DB[X.SH.RECV].length + ' by=' + DB[X.SH.RECV][0][7]);
+
+  const st2 = X.markReceived('T1', '1234', today, 'テスト店', '04:30', '田中', true, Date.now());
+  ok('別の受取時間は別の行', DB[X.SH.RECV].length === 2 && !!st2.received['テスト店|04:30'], 'rows=' + DB[X.SH.RECV].length);
+
+  const st3 = X.markReceived('T1', '1234', today, 'テスト店', '07:00', '田中', false, Date.now());
+  ok('取消すと消える', !st3.received['テスト店|07:00'], JSON.stringify(st3.received));
+  ok('取消しても別の受取は残る', DB[X.SH.RECV].length === 1 && !!st3.received['テスト店|04:30'], 'rows=' + DB[X.SH.RECV].length);
+})();
+throws('設定に無い店舗は拒む', () => X.markReceived('T1', '1234', today, 'よその店', '07:00', '田中', true, Date.now()), /受取にありません/);
+throws('受取時間が違えば拒む', () => X.markReceived('T1', '1234', today, 'テスト店', '19:00', '田中', true, Date.now()), /受取にありません/);
+throws('PINが違えば拒む', () => X.markReceived('T1', '9999', today, 'テスト店', '07:00', '田中', true, Date.now()), /PIN/);
+ok('受取記録シートが無くても画面は開ける', (function () {
+  const keep = DB[X.SH.RECV]; delete DB[X.SH.RECV];
+  try { const d = X.getDayState('T1', '1234', today); return !!d && JSON.stringify(d.received) === '{}'; }
+  catch (e) { return false; } finally { DB[X.SH.RECV] = keep; }
+})());
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);

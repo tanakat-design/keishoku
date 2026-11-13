@@ -132,6 +132,14 @@ textarea{margin-top:10px;font-size:14px;resize:vertical}
 .rcv .pay{font-size:14px;margin-top:8px;padding:6px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f0d890}
 .rcv .pay b{font-size:16px}
 .rcv.past{opacity:.6}
+/* 受取済み。受け取ったものは一目で分かるように緑の枠にし、未受取だけが白く残るようにする */
+.rcv.got{border-color:#1e8e3e;background:#f3faf4}
+.rcv.got.past{opacity:1}
+.rcv .gotbox{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.rcv .gotbox .go{flex:1 1 auto;min-width:160px;background:#1e8e3e;color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:700}
+.rcv .gotbox .go:disabled{opacity:.5}
+.rcv .gotbox .lbl{flex:1 1 auto;font-size:15px;font-weight:700;color:#1e6b31}
+.rcv .gotbox .undo{background:#fff;color:var(--sub);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px}
 </style>
 </head>
 <body>
@@ -242,6 +250,12 @@ function pendingOut() {
   return set;
 }
 function pendingClose() { const s = S.session; return !!s && queue().some(j => j.kind === 'close' && j.tid === s.tid && j.date === S.date); }
+/** 送信待ちの受取済み。キー 店舗|受取時刻 → true（受取済みにした）／false（取消した）。後から押した方を採る */
+function pendingRecv() {
+  const m = new Map(); const s = S.session; if (!s) return m;
+  queue().forEach(j => { if (j.kind === 'recv' && j.tid === s.tid && j.date === S.date) m.set(j.key, j.on); });
+  return m;
+}
 async function flush() {
   if (flush.running || !queue().length) return;
   flush.running = true;
@@ -641,20 +655,58 @@ function recvHtml() {
   groups.sort((a, b) => toMin(a.recv) - toMin(b.recv));
   groups.forEach(g => { const es = [...new Set(g.list.map(([it]) => it.exp || ''))]; g.mixed = es.length > 1; g.exp = es.length === 1 ? es[0] : ''; });
   const nowMin = (() => { const n = new Date(); return md(S.date) === md(S.today) ? n.getHours() * 60 + n.getMinutes() : -1; })();
-  return '<div class="notice info">この日の受取予定です。時間・受取方法・受取場所を確認してください。</div>' + groups.map(g => {
+  // 受取済みは店舗と受取時刻で記録する。店舗名を onclick に埋めるとクォートやアポストロフィで壊れるので、並び順の番号だけ渡す
+  S.rg = groups.map(g => ({ store: g.store || '', recv: g.recv || '' }));
+  const pr = pendingRecv(), rec = d.received || {};
+  const done = groups.filter((g, i) => recvState(i, pr, rec)).length;
+  return '<div class="notice info">この日の受取予定です。時間・受取方法・受取場所・支払いを確認してください。受け取ったら「受取済みにする」を押してください。</div>' +
+    `<div class="small" style="margin:-4px 0 10px">受取済み ${done} / ${groups.length} 件</div>` +
+    groups.map((g, i) => {
     const m = methodLabel(g.method);
     const map = g.addr ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g.addr)}" target="_blank" rel="noopener">地図</a>` : '';
     const tel = g.tel ? `<a href="tel:${esc(g.tel.replace(/[^\d+]/g, ''))}">${esc(g.tel)}</a>` : '';
     const past = nowMin >= 0 && g.recv && toMin(g.recv) < nowMin - 30;
-    return `<div class="rcv ${past ? 'past' : ''}">
+    const r = recvState(i, pr, rec);
+    const box = r
+      ? `<div class="gotbox"><span class="lbl">受取済み${r.wait ? '（送信待ち）' : (r.at ? ' ' + esc(r.at) : '') + (r.by ? '・' + esc(r.by) : '')}</span><button class="undo" ${S.busy ? 'disabled' : ''} onclick="toggleRecv(${i},false)">取消</button></div>`
+      : `<div class="gotbox"><button class="go" ${S.busy ? 'disabled' : ''} onclick="toggleRecv(${i},true)">受取済みにする</button></div>`;
+    return `<div class="rcv ${r ? 'got' : ''} ${past ? 'past' : ''}">
       <div class="top"><span class="tm">${esc(g.recv || '--:--')}</span><span class="st">${esc(g.store || '店舗未設定')}</span></div>
       ${m.label ? `<span class="mth ${m.label === '配達' ? 'dlv' : ''}">${esc(m.label)}</span>${m.note ? `<span class="note">${esc(m.note)}</span>` : ''}` : ''}
       ${g.addr || tel ? `<div class="info">${g.addr ? '住所：' + esc(g.addr) + map : ''}${g.addr && tel ? '<br>' : ''}${tel ? '電話：' + tel : ''}</div>` : ''}
       ${g.pay || g.amt ? `<div class="pay">支払：${esc(g.pay || '未設定')}${g.amt ? '　<b>' + esc(g.amt) + '</b>' : ''}</div>` : ''}
       <div class="its">${g.list.map(([it]) => `<span>${esc(baseName(it.name))} ${it.stock}${g.mixed && it.exp ? `<small>（期限 ${esc(fmtExp(it.exp))}）</small>` : ''}</span>`).join('')}</div>
       ${g.exp ? `<div class="exp">賞味期限 ${esc(fmtExp(g.exp))}</div>` : ''}
+      ${box}
     </div>`;
   }).join('');
+}
+/** 受取済みかどうか。送信待ちのキューを本番の記録より優先する。押した直後から緑にするため */
+function recvState(i, pr, rec) {
+  const x = S.rg && S.rg[i]; if (!x) return null;
+  const key = x.store + '|' + x.recv;
+  if (pr.has(key)) return pr.get(key) ? { wait: true } : null;
+  return rec[key] || null;
+}
+/** 受取済みを付け外しする。i は recvHtml が作った S.rg の番号 */
+async function toggleRecv(i, on) {
+  if (S.busy) return;
+  const x = S.rg && S.rg[i]; if (!x) return;
+  if (!on && !confirm('受取済みを取り消しますか？')) return;
+  const s = S.session, date = S.date;
+  const args = [s.tid, s.pin, date, x.store, x.recv, s.staff, on, Date.now()];
+  S.busy = true; render();
+  try {
+    S.day = await call('markReceived', ...args);
+    S.loadedAt = new Date(); LS.set(dayKey(s.tid, date), S.day);
+    toast(on ? '受取済みにしました' : '受取済みを取り消しました');
+  } catch (e) {
+    if (isNetErr(e)) {
+      enqueue({ fn: 'markReceived', args, kind: 'recv', tid: s.tid, date: date, key: x.store + '|' + x.recv, on: on });
+      toast('通信できないため端末に保存しました。回復後に自動送信します');
+    } else toast(errMsg(e));
+  }
+  S.busy = false; render();
 }
 
 /* --- 期限切れ --- */
@@ -1118,7 +1170,10 @@ function renderAdminEdit() {
     <label>シートに賞味期限がない受取の賞味期限（受取時刻から何時間後か。空欄なら取り込み後に個別入力）</label><input id="fExpH" type="number" inputmode="decimal" min="0" step="0.5" placeholder="例：5">
     <label class="btn" style="display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;cursor:pointer;color:#fff;font-size:16px;font-weight:600">CSVファイルを選んで取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this)"></label>
     <textarea id="fImport" rows="3" placeholder="またはここに貼り付け"></textarea>
-    <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet()">貼り付けた内容を取り込む</button></div>
+    <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet()">貼り付けた内容を取り込む</button>
+    <div class="small" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">大会の途中でCSVを入れ直すと品目名が変わり、それまでの在庫切れログと紐付かなくなります。支払いだけを入れたいときはこちらを使ってください。品目・在庫数・受取時間・賞味期限は変えません。</div>
+    <label class="btn-sub" style="display:block;text-align:center;margin-top:8px;padding:12px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600">CSVから支払いだけ取り込む<input type="file" accept=".csv,text/csv,.tsv,.txt" style="display:none" onchange="importFile(this,true)"></label>
+    <button class="btn-sub" style="width:100%;margin-top:8px" onclick="importSheet(true)">貼り付けた内容から支払いだけ取り込む</button></div>
     <h2>開催日ごとの受取・品目・在庫数</h2>` +
     f.days.map((d, di) => `<div class="card" data-di="${di}">
       <div class="irow" style="margin-top:0"><input type="date" class="dDate" value="${esc(d.date)}" style="flex:1;min-width:0"><button class="btn-sub" onclick="fAct('delDay',${di})">日を削除</button></div>` +
@@ -1364,7 +1419,7 @@ function importKeishoku(text, today, split, expH) {
   result.info = { expFromSheet, expFromHours, expBlank, expItem, recvAssumed, assumedStores: [...assumedStores], labelDef, bad };
   return result;
 }
-async function importFile(input) {
+async function importFile(input, payOnly) {
   const f = input.files && input.files[0];
   input.value = '';
   if (!f) return;
@@ -1373,14 +1428,15 @@ async function importFile(input) {
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
   catch (e) { text = new TextDecoder('shift_jis').decode(buf); } // Excelで保存したCSV
   document.getElementById('fImport').value = text.replace(/^\uFEFF/, '');
-  importSheet();
+  importSheet(payOnly);
 }
-function importSheet() {
+function importSheet(payOnly) {
   readForm();
   const text = val('fImport');
   if (!text.trim()) return toast('軽食シートの内容を貼り付けてください');
   let days;
   try { days = importKeishoku(text, S.today, document.getElementById('fSplit').checked, val('fExpH')); } catch (e) { return toast(errMsg(e)); }
+  if (payOnly) return importPay(days);
   const cntD = d => d.groups.reduce((a, g) => a + g.items.length, 0);
   const n = days.reduce((a, d) => a + cntD(d), 0);
   const inf = days.info;
@@ -1391,6 +1447,41 @@ function importSheet() {
   S.form.days = days.map(d => ({ date: d.date, groups: d.groups }));
   render();
   toast('取り込みました。内容を確認して保存してください');
+}
+
+/**
+ * CSVの支払方法・支払金額だけを今の設定に写す。
+ * 品目名・在庫数・受取時間・賞味期限は触らない。大会の途中で取り込んでも、
+ * 品目名が変わって過去の在庫切れログとの紐付きが切れることがないようにするため。
+ * 突き合わせは 開催日×店舗×受取時刻、合わなければ 開催日×店舗。
+ */
+function importPay(days) {
+  const src = new Map();
+  days.forEach(d => d.groups.forEach(g => {
+    if (!g.pay && !g.amt) return;
+    src.set(d.date + '|' + (g.store || '') + '|' + (g.recv || ''), g);
+    const k = d.date + '|' + (g.store || '');
+    if (!src.has(k)) src.set(k, g);
+  }));
+  if (!src.size) return toast('CSVに支払方法・支払金額の行が見つかりません');
+  const plan = [], miss = [];
+  (S.form.days || []).forEach(d => (d.groups || []).forEach(g => {
+    const x = src.get(d.date + '|' + (g.store || '') + '|' + (g.recv || '')) || src.get(d.date + '|' + (g.store || ''));
+    const label = md(d.date) + ' ' + (g.recv || '--:--') + ' ' + (g.store || '店舗未設定');
+    if (!x) { miss.push(label); return; }
+    plan.push({ g: g, pay: x.pay || '', amt: x.amt || '', label: label });
+  }));
+  if (!plan.length) return toast('今の設定とCSVの店舗が1つも一致しません。店舗名を確かめてください');
+  const nl = String.fromCharCode(10);
+  const msg = plan.length + '件の受取に支払いを入れます。' + nl +
+    plan.slice(0, 12).map(p => '・' + p.label + '：' + (p.pay || '未設定') + (p.amt ? '　' + p.amt : '')).join(nl) +
+    (plan.length > 12 ? nl + '…ほか' + (plan.length - 12) + '件' : '') +
+    (miss.length ? nl + nl + 'CSVに見つからなかった受取（そのまま）：' + nl + miss.slice(0, 6).map(m => '・' + m).join(nl) + (miss.length > 6 ? nl + '…ほか' + (miss.length - 6) + '件' : '') : '') +
+    nl + nl + '品目・在庫数・受取時間・賞味期限は変えません。入れますか？';
+  if (!confirm(msg)) return;
+  plan.forEach(p => { p.g.pay = p.pay; p.g.amt = p.amt; });
+  render();
+  toast('支払いを入れました。内容を確認して保存してください');
 }
 
 /* ===== 自動更新（他スタッフの記録を反映） ===== */
