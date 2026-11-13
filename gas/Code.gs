@@ -271,7 +271,8 @@ function adminList(pin) {
     return {
       id: t.id, name: t.name, staffPin: t.staffPin, active: t.active,
       days: Object.keys(c).sort().map(function (d) {
-        return { date: d, items: c[d].map(function (i) { return { name: i.name, stock: i.stock, store: i.store, recv: i.recv, exp: i.exp, method: i.method, addr: i.addr, tel: i.tel }; }) };
+        // 支払いも返す。返さないと、管理画面で開いて保存し直したときに支払方法・支払金額が空で上書きされる
+        return { date: d, items: c[d].map(function (i) { return { name: i.name, stock: i.stock, store: i.store, recv: i.recv, exp: i.exp, method: i.method, addr: i.addr, tel: i.tel, pay: i.pay, amt: i.amt }; }) };
       }),
     };
   });
