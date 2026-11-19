@@ -444,6 +444,19 @@ ok('数値でない枚数は空にする', X.popPrices_()['夜食パン'].price 
 ok('数値の枚数はそのまま', X.popPrices_()['おにぎり'].price === 1, JSON.stringify(X.popPrices_()['おにぎり']));
 ok('空欄の枚数も空のまま', (function () { DB[X.SH.POP].push(['空欄パン', '', '', new Date()]); return X.popPrices_()['空欄パン'].price === ''; })());
 
+// 14) スタッフ画面がフロアの担当を選べるよう、卓の一覧も返す
+console.log('');
+console.log('[スタッフ画面に返す卓の一覧]');
+(function () {
+  X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-103, 201-202, VIP', 9);
+  X.adminSaveTable(PROPS.ADMIN_PIN, 'T1', '202', 9, '無効', '');
+  const d = X.getDayState('T1', '1234', today);
+  ok('卓の一覧が返る', Array.isArray(d.tables), JSON.stringify(d.tables));
+  ok('有効な卓だけ返る', d.tables.indexOf('202') < 0 && d.tables.indexOf('201') >= 0, JSON.stringify(d.tables));
+  ok('数字でない卓も返る', d.tables.indexOf('VIP') >= 0, JSON.stringify(d.tables));
+  ok('件数が合う', d.tables.length === 5, JSON.stringify(d.tables));
+})();
+
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);
 process.exit(fail ? 1 : 0);

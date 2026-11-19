@@ -382,7 +382,7 @@ function renderMain() {
   let h = `<div class="header"><div><h1 style="margin-bottom:4px">${esc(s.name)}</h1><div class="small">入力者：${esc(s.staff)}　<span style="color:${S.loadedAt && Date.now() - S.loadedAt.getTime() > 180000 ? 'var(--danger)' : 'var(--sub)'}">${esc(freshText())}</span></div></div><button class="link" onclick="logout()">切替</button></div>`;
   if (!s.days.length) { hideBar(); app.innerHTML = h + '<div class="card empty">開催日が設定されていません。管理者に連絡してください。</div>'; return; }
   h += '<div class="chips">' + s.days.map(d => `<button class="chip ${d === S.date ? 'on' : ''}" onclick="pickDate('${d}')">${md(d)}</button>`).join('') + '</div>';
-  const nOpen = ((S.day && S.day.orders) || []).filter(o => o.state === '受付').length;
+  const nOpen = ((S.day && S.day.orders) || []).filter(o => o.state === '受付' && inMyArea(o.table)).length;
   h += `<div class="tabs"><button class="tab ${S.tab === 'record' ? 'on' : ''}" onclick="pickTab('record')">在庫切れ記録</button><button class="tab ${S.tab === 'close' ? 'on' : ''}" onclick="pickTab('close')">期限切れ</button><button class="tab ${S.tab === 'recv' ? 'on' : ''}" onclick="pickTab('recv')">受取</button><button class="tab ${S.tab === 'order' ? 'on' : ''}" onclick="pickTab('order')">注文${nOpen ? '（' + nOpen + '）' : ''}</button></div>`;
   const q = queue().filter(j => j.tid === s.tid).length;
   if (q) h += `<div class="notice warn">未送信が${q}件あります。通信が回復すると自動で送信します。</div>`;
@@ -575,14 +575,50 @@ function methodLabel(m) {
 }
 /* --- 注文（卓上から届いたもの） --- */
 function deviceId() { let d = LS.get('kDevice', ''); if (!d) { d = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); LS.set('kDevice', d); } return d; }
+/* --- 担当する卓（フロア）---
+ * フロアごとに端末を1台置く運用のために、注文の表示と通知を卓番号で絞る。
+ * 絞るのは「表示」だけで、サーバーには何も送らない。選んだ内容は端末ごとに覚える。
+ * 卓番号は会場ごとに階で分かれている（例：1階=100番台、2階=200番台）前提で、百の位でまとめる。 */
+function areaKey() { const s = S.session; return 'kOrdArea:' + (s ? s.tid : ''); }
+function myArea() { return String(LS.get(areaKey(), '') || ''); }
+function setArea(a) { LS.set(areaKey(), a); checkOrders.seen = {}; render(); }
+function areaOf(table) {
+  const t = String(table == null ? '' : table).trim();
+  if (!/^\d+$/.test(t)) return 'その他';        // VIP など数字でない卓
+  const n = Number(t);
+  return n >= 100 ? Math.floor(n / 100) + '00番台' : 'その他';
+}
+/** 登録されている卓から、選べるまとまりを作る。1つしか無ければ絞る意味がないので出さない */
+function areaList() {
+  const t = (S.day && S.day.tables) || [];
+  const m = new Map();
+  t.forEach(x => { const a = areaOf(x); m.set(a, (m.get(a) || 0) + 1); });
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+}
+function inMyArea(table) { const a = myArea(); return !a || areaOf(table) === a; }
+function areaChips() {
+  const list = areaList();
+  if (list.length < 2) return '';
+  // 卓の付け方が変わって、覚えている担当がどこにも無くなったら「全部」に戻す
+  if (myArea() && !list.some(x => x[0] === myArea())) LS.del(areaKey());
+  const cur = myArea();
+  return '<div class="small" style="margin-top:10px">担当する卓（この端末だけの設定）</div><div class="chips">' +
+    `<button class="chip ${cur ? '' : 'on'}" onclick="setArea('')">全部</button>` +
+    list.map(([a, n]) => `<button class="chip ${cur === a ? 'on' : ''}" onclick="setArea('${esc(a)}')">${esc(a)}（${n}卓）</button>`).join('') +
+    '</div>';
+}
+
 function orderHtml() {
-  const os = (S.day && S.day.orders) || [];
+  const all = (S.day && S.day.orders) || [];
+  const os = all.filter(o => inMyArea(o.table));
+  const hidden = all.length - os.length;
   const d = S.day || {};
   const open = !!d.orderOpenNow;          // 受付中で、かつ受付時間内。実際に届くかどうか
   const head = `<div class="notice ${open ? 'info' : 'warn'}">${
     open ? '卓上からの注文を受け付けています。'
       : d.orderOpen ? `いまは受付時間外です（${esc(d.orderHours || '')}）。注文は届きません。`
-      : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>`;
+      : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>` + areaChips() +
+    (hidden ? `<div class="notice warn" style="margin-top:8px">ほかの担当ぶんの注文を${hidden}件隠しています。<button class="link" onclick="setArea('')">全部見る</button></div>` : '');
   if (!os.length) return head + '<div class="card empty">未対応の注文はありません</div>';
   const byId = [];
   os.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, at: o.at, lines: [] }); g.lines.push(o); });
@@ -626,8 +662,9 @@ function ordCancel(id) {
 function checkOrders() {
   const os = (S.day && S.day.orders) || [];
   const seen = checkOrders.seen = checkOrders.seen || {};
+  // 新しい注文は担当ぶんだけ鳴らす。担当を変えると seen を捨てるので、切り替えれば出し直せる
   const fresh = [];
-  os.forEach(o => { const k = o.id + '#' + o.no; if (o.state === '受付' && !seen[k]) { seen[k] = 1; fresh.push(o); } });
+  os.forEach(o => { const k = o.id + '#' + o.no; if (o.state === '受付' && !seen[k]) { seen[k] = 1; if (inMyArea(o.table)) fresh.push(o); } });
   const byId = [];
   fresh.forEach(o => { let g = byId.find(x => x.id === o.id); if (!g) byId.push(g = { id: o.id, table: o.table, seat: o.seat, names: [] }); g.names.push(o.name + (o.qty > 1 ? '×' + o.qty : '')); });
   byId.forEach(g => alertBar('ord:' + g.id, g.table + '番テーブルの' + g.seat + '番シートのプレイヤーに ' + g.names.join('、') + ' を持っていってください。', 'order', 'ord'));
@@ -638,19 +675,23 @@ function checkOrders() {
   });
   // 3分以上ほったらかしの受付があれば、もう一度鳴らす
   // 帯を閉じずに放置している場合もあるので、再通知は別のIDで出す（同じIDだと alertBar が何もしない）
-  const old = os.filter(o => o.state === '受付' && o.at && minAgo(o.at) >= 3);
-  old.forEach(o => {
-    const r = Math.floor(minAgo(o.at) / 3), k = 'again:' + o.id + ':' + r;
+  // 10分を過ぎたものは担当外でも鳴らす。その階の端末が落ちていても誰かが気づけるようにするため
+  os.filter(o => o.state === '受付' && o.at && minAgo(o.at) >= 3).forEach(o => {
+    const m = minAgo(o.at), mine = inMyArea(o.table);
+    if (!mine && m < 10) return;
+    const r = Math.floor(m / 3), k = 'again:' + o.id + ':' + r;
     if (seen[k]) return;
     seen[k] = 1;
     closeAlert('ord:' + o.id);
-    alertBar('again:' + o.id + ':' + r, o.table + '番テーブルの' + o.seat + '番シートの注文がまだ未対応です。', 'order', 'ord');
+    alertBar('again:' + o.id + ':' + r, o.table + '番テーブルの' + o.seat + '番シートの注文が' + m + '分ほったらかしです。' + (mine ? '' : '（担当外。「全部見る」で出ます）'), 'order', 'ord');
   });
 }
 function minAgo(hm) {
   const m = String(hm || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return 0;
   const now = new Date(), d = new Date(now); d.setHours(+m[1], +m[2], 0, 0);
-  if (d > now) d.setDate(d.getDate() - 1);
+  // 端末の時計がサーバーより少し遅れていると、さっき入った注文が未来の時刻に見える。
+  // そのまま前日扱いにすると「1438分ほったらかし」になって再通知が即座に出るので、少しの未来は0分とみなす
+  if (d > now) { if (d - now <= 5 * 60000) return 0; d.setDate(d.getDate() - 1); }
   return Math.floor((now - d) / 60000);
 }
 

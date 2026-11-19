@@ -159,6 +159,9 @@ function getDayState(tid, pin, date) {
   st.orderOpen = t.orderOpen;
   st.orderOpenNow = !!(t.orderOpen && inHours_(t.orderHours));  // 受付中でも受付時間外なら false
   st.orderHours = t.orderHours;
+  // 卓の一覧も返す。スタッフ画面が「何階の担当か」のボタンを作るのに使う。
+  // 注文が1件も入っていない時点でも選べるようにするため、注文から推測せずここで渡す
+  st.tables = tables_(str_(tid)).filter(function (x) { return x.active; }).map(function (x) { return x.table; });
   return st;
 }
 
