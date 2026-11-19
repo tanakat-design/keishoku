@@ -423,6 +423,27 @@ console.log('[在庫切れ時刻の後入れ]');
   ok('先に在庫切れでも時刻が入る（従来どおり）', other()[7] === X.hm_(DB[X.SH.LOG][0][10]), JSON.stringify(other()));
 })();
 
+// 12) 受付を開始したあと、画面が「受付時間外」と誤表示しないための戻り値
+console.log('');
+console.log('[受付の開始と戻り値]');
+(function () {
+  const r1 = X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '');
+  ok('受付時間が空なら openNow は true', r1.openNow === true && r1.hoursOk === true, JSON.stringify(r1));
+  const r2 = X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', false, '');
+  ok('停止すると openNow は false', r2.openNow === false, JSON.stringify(r2));
+  const r3 = X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '00:00-23:59');
+  ok('受付時間内なら openNow は true', r3.openNow === true && r3.hoursOk === true, JSON.stringify(r3));
+  ok('トークンも返る', !!r3.orderToken);
+})();
+
+// 13) ドリチケ枚数が数値でないときに NaN を記録に残さない
+console.log('');
+console.log('[ドリチケ枚数]');
+DB[X.SH.POP].push(['夜食パン', '—', '', new Date()]);
+ok('数値でない枚数は空にする', X.popPrices_()['夜食パン'].price === '', JSON.stringify(X.popPrices_()['夜食パン']));
+ok('数値の枚数はそのまま', X.popPrices_()['おにぎり'].price === 1, JSON.stringify(X.popPrices_()['おにぎり']));
+ok('空欄の枚数も空のまま', (function () { DB[X.SH.POP].push(['空欄パン', '', '', new Date()]); return X.popPrices_()['空欄パン'].price === ''; })());
+
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);
 process.exit(fail ? 1 : 0);

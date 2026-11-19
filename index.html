@@ -934,7 +934,7 @@ function renderAdminOrd() {
       <textarea id="ordSpec" rows="3" style="width:100%;margin-top:8px;font-size:15px;padding:8px" placeholder="例：101-110, 201-205">${esc(o.spec != null ? o.spec : tbs.map(t => t.table).join(', '))}</textarea>
       <div class="popctl" style="margin-top:8px"><span class="small">席数</span><input id="ordS2" inputmode="numeric" style="width:70px" value="${tbs.length ? tbs[0].seats : 9}">
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordPreview()">確認</button>
-        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSet()">この内容にする</button></div>
+        <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSetTables()">この内容にする</button></div>
       ${o.preview ? `<div class="notice info" style="margin-top:8px">${o.preview.length}卓になります：${esc(o.preview.join('、'))}</div>` : ''}
       <div class="small" style="margin-top:6px">書いた卓がそのままこの大会の卓になります。すでにある卓の席数はそのまま残り、書かなかった卓は消えます。</div>
     </div>
@@ -985,7 +985,8 @@ async function ordPreview() {
   catch (e) { if (ordSame(id)) { S.ord.preview = null; toast(errMsg(e)); } }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
-async function ordSet() {
+/** 卓の一括設定。スタッフ用の ordSet（配達の担当・完了・取消）と名前が衝突していたので別名にしてある */
+async function ordSetTables() {
   const id = S.ord.id, spec = ordSpecValue(), s = (document.getElementById('ordS2') || {}).value;
   S.ord.spec = spec;
   let list;

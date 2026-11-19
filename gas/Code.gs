@@ -832,7 +832,11 @@ function adminOrderOpen(pin, tid, open, hours) {
     if (!str_(row[7])) row[7] = rnd_(16);   // まだ無ければ、受付を開くときに注文トークンを作る
     row[4] = new Date();
     sh.getRange(idx + 2, 1, 1, HEAD[SH.TOURN].length).setValues([row]);
-    return { orderOpen: !!open, orderHours: str_(row[6]), orderToken: str_(row[7]) };
+    // openNow / hoursOk も返す。返さないと画面側が undefined を入れてしまい、
+    // 受付を開始した直後に「受付時間外。注文は届きません」と出る（実際は受け付けている）
+    const h2 = str_(row[6]);
+    return { orderOpen: !!open, orderHours: h2, orderToken: str_(row[7]),
+      openNow: !!(open && inHours_(h2)), hoursOk: !h2 || inHoursValid_(h2) };
   });
 }
 
@@ -1009,7 +1013,7 @@ function popPrices_() {
     if (last < 2) return m;
     sh.getRange(2, 1, last - 1, 2).getValues().forEach(function (r) {
       const n = str_(r[0]);
-      if (n) m[n] = { price: r[1] === '' || r[1] == null ? '' : Number(r[1]) };
+      if (n) m[n] = { price: num_(r[1]) };
     });
   } catch (e) { /* 初期設定前はPOP設定なしとして扱う */ }
   return m;
@@ -1022,7 +1026,7 @@ function popMaster_(withImg) {
   rows.forEach(function (r) {
     const n = str_(r[0]);
     if (!n) return;
-    m[n] = { price: r[1] === '' || r[1] == null ? '' : Number(r[1]), v: r[3] instanceof Date ? r[3].getTime() : 0, img: withImg ? str_(r[2]) : '' };
+    m[n] = { price: num_(r[1]), v: r[3] instanceof Date ? r[3].getTime() : 0, img: withImg ? str_(r[2]) : '' };
     if (!withImg) m[n].has = !!str_(r[2]);
   });
   return m;
@@ -1274,6 +1278,8 @@ function when_(clientAt) {
 
 function book_() { return SpreadsheetApp.openById(SPREADSHEET_ID); }
 function str_(v) { return v == null ? '' : String(v).trim(); }
+/** ドリチケ枚数などの数値セル。空や数にならない値は '' にする。NaN を注文シートに書き込まないため */
+function num_(v) { if (v === '' || v == null) return ''; const n = Number(v); return (typeof n === 'number' && isFinite(n)) ? n : ''; }
 function ds_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : str_(v); }
 function hm_(d) { return Utilities.formatDate(d, TZ, 'HH:mm'); }
 /** 受取時間のセルを 'HH:MM' に揃える。書式が時刻に戻っていても文字と比べられる */
