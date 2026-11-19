@@ -12,7 +12,7 @@
 - `test.html`：POPの表示テスト（SPADIE / JOPT / 標準のリンク集。見本データで開く）
 - `gas/test-order.js`：GASのグローバルをスタブして注文ロジックを Node で検証する（`node gas/test-order.js gas/Code.gs`）
 - `gas/check-live.js`：本番に入っている大会の設定を外から点検する（`node gas/check-live.js <大会ID>`。引数なしで大会一覧）。PIN不要・読み取りだけなので何度流しても本番は変わらない
-- `ORDER.md`：卓上注文と通知の設計 ／ `SETUP-ORDER.md`：GASの貼り替えからQR・通知設定までの手順
+- `ORDER.md`：卓上注文と通知の設計 ／ `SETUP-ORDER.md`：反映手順。**0章が大会ごとにやること**（卓の入れ直し・受付開始・QR）で、1章以降は初回のみ（実施済み）
 - `gas/test_osaka02.csv`：CSV取り込みのテスト用データ
 
 # 1. アプリの目的
@@ -64,6 +64,7 @@
   - `placeOrder(tid, token, table, seat, items, reqId)`：PIN不要。大会の注文トークン・卓席の実在・受付中・受付時間・個数と回数の制限・品目が本当に販売中かを順に確かめる。reqId の重複確認を回数制限より先にやる
   - `adminOrderToken(pin, tid)`：注文トークンの発行・再発行（刷ってあるQRが一斉に失効する）／`adminSetTables(pin, tid, spec, seats)`：卓の一括設定（`parseTableSpec_` が「101-110」「001-012」「VIP」などを解釈する。ゼロ埋めは桁を保つ。書いた卓がその大会の卓になり、既存の席数は残り、書かなかった卓は消える）／`adminPreviewTables(pin, spec)`：解釈結果だけ返す（保存前の確認用）
   - `getOrder(id, key)`：PIN不要。照会キーが合う注文だけ返す。プレイヤー画面の状態表示用
+    - `order.html` の結果画面は明細の状態から見出しを決める。全部取消なら「ご注文は取り消されました。」、取消を除いて全部完了なら「お届けしました。ありがとうございました。」、それ以外は「ご注文を受け付けました。」。「◯◯が届けに行きます。」は**配達中の明細があるときだけ**出す（届け終わってから出したままにしない）
   - `setOrder(tid, pin, id, no, state, staff, device, reason)`：配達中／完了／取消。先に押した人を勝ちにし、終端状態からは戻さない
   - `adminTables` / `adminSaveTable`（トークン再発行）／ `adminOrderOpen`（緊急停止・受付時間）
   - `getDayState` の戻りに `orders`（未完了の明細120件まで）と `orderOpen` / `orderOpenNow` / `orderHours` を足してある。`orderOpenNow` は「いま実際に届くか」で、受付中でも受付時間外なら false。画面はこれを出す（`adminTables` の `openNow` / `hoursOk` も同じ目的）

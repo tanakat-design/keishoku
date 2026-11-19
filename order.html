@@ -240,12 +240,17 @@ function render() {
   }
   if (S.view === 'done' && S.order) {
     const ls = S.order.lines || [];
-    const taken = ls.filter(l => l.by)[0];
+    // 届け終わった・取り消された注文に「お届けします」と出したままにしない
+    const live = ls.filter(l => l.state !== '取消');
+    const going = ls.filter(l => l.state === '配達中' && l.by)[0];
+    const msg = !live.length ? { k: 'bad', t: 'ご注文は取り消されました。スタッフにお声がけください。' }
+      : live.every(l => l.state === '完了') ? { k: 'ok', t: 'お届けしました。ありがとうございました。' }
+      : { k: 'ok', t: 'ご注文を受け付けました。スタッフがお席までお届けします。' };
     app.innerHTML = head + `<div class="card">
-      <div class="notice ok">ご注文を受け付けました。スタッフがお席までお届けします。</div>
+      <div class="notice ${msg.k}">${esc(msg.t)}</div>
       ${ls.map(l => `<div class="st"><b style="flex:1">${esc(l.name)}${l.qty > 1 ? ' ×' + l.qty : ''}</b>${stateBadge(l.state)}</div>
         ${l.state === '取消' && l.reason ? `<div class="small" style="margin:-4px 0 8px">${esc(l.reason)}</div>` : ''}`).join('')}
-      ${taken && taken.by ? `<div class="notice info" style="margin-top:10px">${esc(taken.by)}が届けに行きます。</div>` : ''}
+      ${going ? `<div class="notice info" style="margin-top:10px">${esc(going.by)}が届けに行きます。</div>` : ''}
       <div class="small" style="margin-top:10px">ドリチケはお渡しのときにお預かりします。</div>
       <button class="btn sub" style="margin-top:12px" onclick="S.view='menu';render()">続けて注文する</button></div>`;
     bar.innerHTML = ''; return;
