@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="会場で軽食を記録するアプリの使い方と、よくある質問。">
+<style>
+/* GitHub Pages で単体で開くときの土台。Artifact 側の既定と同じにしてある */
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>軽食アプリ 現場マニュアル</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* レイアウト：1カラムの手引き。上に追従する目次、本文は読む順。画面の色分け（黄＝予告・赤＝期限切れ・緑＝受取済み）をそのまま紙面の色に使う */
+:root{
+  --bg:#f7f6f3; --surface:#ffffff; --fg:#1c1b19; --muted:#6b6862; --line:#e2dfd8;
+  --accent:#1558c0; --accent-weak:#e8f0fd;
+  --warn:#9a6700; --warn-bg:#fff8e1; --warn-line:#f0d890;
+  --danger:#a52019; --danger-bg:#fdecea; --danger-line:#f3c3bf;
+  --ok:#1e6b31; --ok-bg:#f1f9f3; --ok-line:#bfe0c7;
+  --display:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --body:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17160f; --surface:#211f19; --fg:#efece4; --muted:#a39e92; --line:#38352c;
+  --accent:#8ab4f8; --accent-weak:#1e2a3d;
+  --warn:#f0c04a; --warn-bg:#2d2512; --warn-line:#5a4a1d;
+  --danger:#f2938c; --danger-bg:#331c1a; --danger-line:#5e302c;
+  --ok:#8cd6a0; --ok-bg:#15271a; --ok-line:#2c4a33;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#17160f; --surface:#211f19; --fg:#efece4; --muted:#a39e92; --line:#38352c;
+  --accent:#8ab4f8; --accent-weak:#1e2a3d;
+  --warn:#f0c04a; --warn-bg:#2d2512; --warn-line:#5a4a1d;
+  --danger:#f2938c; --danger-bg:#331c1a; --danger-line:#5e302c;
+  --ok:#8cd6a0; --ok-bg:#15271a; --ok-line:#2c4a33;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.8;margin:0;font-size:16px;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+
+/* 目次 */
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
+nav ol{display:flex;flex-wrap:wrap;gap:6px 14px;list-style:none;margin:0;padding:0;font-size:13.5px}
+nav a{color:var(--muted);text-decoration:none;font-weight:500;white-space:nowrap}
+nav a:hover,nav a:focus-visible{color:var(--accent)}
+
+/* 見出し */
+header{padding-block:40px 8px}
+h1{font-family:var(--display);font-weight:900;font-size:clamp(28px,6vw,40px);line-height:1.25;margin:0 0 10px;text-wrap:balance;letter-spacing:.01em}
+.lede{color:var(--muted);font-size:16px;margin:0;max-width:34em}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(20px,4.2vw,26px);line-height:1.35;margin:52px 0 6px;text-wrap:balance;scroll-margin-top:70px}
+h2 .no{color:var(--accent);font-size:.72em;margin-right:.5em;font-variant-numeric:tabular-nums}
+h3{font-family:var(--display);font-weight:700;font-size:17px;margin:28px 0 8px}
+.sub{color:var(--muted);font-size:14.5px;margin:0 0 18px}
+p{margin:0 0 14px}
+strong{font-weight:700}
+a{color:var(--accent)}
+
+/* かたまり */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-bottom:14px}
+.grid>.card{margin:0}
+
+/* 三行まとめ */
+.top3{display:grid;gap:10px;margin:0 0 8px;padding:0;list-style:none;counter-reset:t}
+.top3 li{counter-increment:t;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:14px 16px 14px 14px;display:flex;gap:12px;align-items:baseline;min-width:0}
+.top3 li::before{content:counter(t);font-family:var(--display);font-weight:900;color:var(--accent);font-size:20px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+
+/* 表 */
+.tw{overflow-x:auto;margin-bottom:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:460px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+th{font-family:var(--display);font-weight:700;background:var(--accent-weak);color:var(--fg);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td code,p code,li code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;background:var(--accent-weak);padding:1px 5px;border-radius:4px}
+
+/* 時系列 */
+.flow{list-style:none;margin:0 0 16px;padding:0;border-left:2px solid var(--line);margin-left:8px}
+.flow li{position:relative;padding:0 0 22px 22px;min-width:0}
+.flow li::before{content:"";position:absolute;left:-7px;top:9px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.flow .when{font-family:var(--display);font-weight:700;font-size:15px;display:block}
+.flow .what{color:var(--muted);font-size:14.5px}
+.flow li:last-child{padding-bottom:0}
+
+/* 色つきの注意 */
+.note{border-radius:10px;padding:14px 16px;margin:0 0 14px;font-size:15px;border:1px solid}
+.note b{font-family:var(--display)}
+.note.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--fg)}
+.note.warn b{color:var(--warn)}
+.note.danger{background:var(--danger-bg);border-color:var(--danger-line)}
+.note.danger b{color:var(--danger)}
+.note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+.note.ok b{color:var(--ok)}
+
+/* バナーの見本 */
+.demo{font-family:var(--display);font-weight:700;border-radius:8px;padding:11px 14px;margin:0 0 8px;font-size:15px}
+.demo.y{background:#f9ab00;color:#202124}
+.demo.r{background:#b3261e;color:#fff}
+
+/* 守ること */
+.rules{counter-reset:r;list-style:none;margin:0 0 16px;padding:0;display:grid;gap:12px}
+.rules li{counter-increment:r;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-width:0}
+.rules .head{font-family:var(--display);font-weight:800;font-size:16.5px;display:block;margin-bottom:4px}
+.rules .head::before{content:"ルール " counter(r);display:inline-block;background:var(--fg);color:var(--bg);font-size:11px;padding:2px 8px;border-radius:99px;margin-right:9px;vertical-align:2px;letter-spacing:.04em}
+.rules .why{color:var(--muted);font-size:14.5px}
+
+/* FAQ */
+.faqgroup{font-family:var(--display);font-weight:700;font-size:15px;color:var(--muted);letter-spacing:.06em;margin:30px 0 10px;text-transform:none}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+details[open]{border-color:var(--accent)}
+summary{cursor:pointer;padding:14px 16px 14px 42px;font-family:var(--display);font-weight:700;font-size:15.5px;position:relative;list-style:none;line-height:1.6}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"Q";position:absolute;left:16px;top:14px;color:var(--accent);font-weight:900}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+details>div{padding:0 16px 16px 42px;position:relative;font-size:15px;border-top:1px solid var(--line);padding-top:14px}
+details>div::before{content:"A";position:absolute;left:16px;top:14px;color:var(--muted);font-family:var(--display);font-weight:900}
+details p:last-child,details ul:last-child{margin-bottom:0}
+details ul{margin:0 0 12px;padding-left:1.2em}
+details li{margin-bottom:4px}
+
+.url{word-break:break-all;font-size:14px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <ol>
+    <li><a href="#start">まず3行</a></li>
+    <li><a href="#screens">3つの画面</a></li>
+    <li><a href="#login">ログイン</a></li>
+    <li><a href="#day">1日の流れ</a></li>
+    <li><a href="#tabs">4つのタブ</a></li>
+    <li><a href="#rules">守ること</a></li>
+    <li><a href="#faq">よくある質問</a></li>
+  </ol>
+</nav>
+
+<header>
+  <h1>軽食アプリ 現場マニュアル</h1>
+  <p class="lede">会場で軽食を記録するアプリの使い方と、毎回聞かれることへの答え。上から順に読めば分かるようにしてある。</p>
+</header>
+
+<h2 id="start"><span class="no">01</span>まず3行</h2>
+<ol class="top3">
+  <li><div><strong>受け取ったら押す。なくなったら押す。期限が切れたら数を入れる。</strong>やることはこの3つだけ。</div></li>
+  <li><div><strong>その場で押す。</strong>閉店後にまとめて入れると、何時に品切れしたかが残らない。次の大会の発注が決められなくなる。</div></li>
+  <li><div><strong>スマホのブラウザで開くだけ。</strong>アプリのインストールも、アカウント作成も要らない。大会ごとの数字のPINだけ。</div></li>
+</ol>
+
+<h2 id="screens"><span class="no">02</span>画面は3つある</h2>
+<p class="sub">名前が似ているので混ざりやすい。使う人と、PINが要るかどうかが違う。</p>
+<div class="tw">
+<table>
+  <tr><th>画面</th><th>使う人</th><th>PIN</th><th>何をする</th></tr>
+  <tr>
+    <td><strong>軽食管理アプリ</strong></td>
+    <td>スタッフ<br>（バイト・ロジ）</td>
+    <td>要る<br>（スタッフPIN）</td>
+    <td>受取の確認、在庫切れの記録、期限切れ数の入力、注文の対応。<strong>これがメイン。</strong></td>
+  </tr>
+  <tr>
+    <td><strong>デジタルPOP</strong></td>
+    <td>お客様<br>（見るだけ）</td>
+    <td>要らない</td>
+    <td>会場のモニターに映す品目一覧。写真とドリチケ枚数が出る。売り切れると自動で白黒になる。<strong>スタッフは触らない。</strong></td>
+  </tr>
+  <tr>
+    <td><strong>卓上注文</strong></td>
+    <td>プレイヤー<br>（自分のスマホ）</td>
+    <td>要らない</td>
+    <td>卓に置いたQRから開いて軽食を注文する。スタッフ側は管理アプリの「注文」タブで受ける。</td>
+  </tr>
+</table>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">スタッフが開くURL</h3>
+  <p class="url"><a href="https://tanakat-design.github.io/keishoku/?openExternalBrowser=1">https://tanakat-design.github.io/keishoku/?openExternalBrowser=1</a></p>
+  <p style="margin-bottom:0;color:var(--muted);font-size:14.5px">末尾の <code>?openExternalBrowser=1</code> は消さないこと。LINEで送られたリンクを踏んだとき、LINEの中のブラウザではなく普通のブラウザで開くための呪文。LINEの中で開くと動きがおかしくなる。</p>
+</div>
+
+<h2 id="login"><span class="no">03</span>ログインのしかた</h2>
+<div class="tw">
+<table>
+  <tr><th>手順</th><th>やること</th></tr>
+  <tr><td>1</td><td><strong>大会を選ぶ。</strong>リストに出てくるのは「表示」にしてある大会だけ。</td></tr>
+  <tr><td>2</td><td><strong>スタッフPINを入れる。</strong>大会ごとの数字。伏せ字になるので、不安なら右の「表示」を押すと見える。</td></tr>
+  <tr><td>3</td><td><strong>自分の名前を入れる。</strong>誰が記録したかが残る。フルネームでなくていい。</td></tr>
+</table>
+</div>
+<div class="note warn"><b>管理者PINとスタッフPINは別物。</b>スタッフPINは大会ごと、管理者PINは全体で1つ。間違えて逆を入れても通らない。</div>
+<p>一度ログインすれば、同じ端末では次から自動で入る。人が交代するときは右上の「切替」を押して名前を入れ直す。</p>
+
+<h2 id="day"><span class="no">04</span>1日の流れ</h2>
+<p class="sub">時間の順。だいたいこうなる。</p>
+<ul class="flow">
+  <li><span class="when">開始前</span><span class="what">ログインして、<strong>受取タブ</strong>を見る。今日は何時にどの店から何が来るか、支払いは現地か済んでいるかを確認する。</span></li>
+  <li><span class="when">受取の時間</span><span class="what">現物を受け取る。数が合っているか数える。受け取ったら<strong>「受取済みにする」</strong>を押す。カードが緑になる。</span></li>
+  <li><span class="when">営業中</span><span class="what">売れてなくなった品目が出たら、その場で<strong>在庫切れ記録タブ</strong>から押す。注文が入ったら<strong>注文タブ</strong>に出る。</span></li>
+  <li><span class="when">賞味期限の30分前</span><span class="what">画面の上に<strong>黄色い帯</strong>が出て、残り時間が1分ずつ減っていく。片付けの準備をする。</span></li>
+  <li><span class="when">賞味期限を過ぎた</span><span class="what"><strong>赤い帯</strong>に変わる。残っている数を数えて、<strong>赤い帯の中の欄に直接入れて「登録」</strong>。帯が消える。</span></li>
+  <li><span class="when">閉店後</span><span class="what">入れ忘れがないか、受取タブの「受取済み ◯/◯件」と期限切れタブを見て確かめる。</span></li>
+</ul>
+
+<h2 id="tabs"><span class="no">05</span>4つのタブ</h2>
+<div class="grid">
+  <div class="card">
+    <h3 style="margin-top:0">在庫切れ記録</h3>
+    <p style="font-size:14.5px;margin-bottom:8px"><strong>いつ：</strong>品目が売り切れた瞬間。</p>
+    <p style="font-size:14.5px;margin-bottom:0;color:var(--muted)">品目をタップして選び、記録する。押し忘れたときは、時刻の欄に <code>21:30</code> のように手で入れれば実際の時刻で残せる。備考も書ける。取消もできる。</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">期限切れ</h3>
+    <p style="font-size:14.5px;margin-bottom:8px"><strong>いつ：</strong>賞味期限が来て、捨てるとき。</p>
+    <p style="font-size:14.5px;margin-bottom:0;color:var(--muted)">受取（店舗×受取時間×賞味期限）ごとに分かれている。<strong>捨てる数</strong>を入れる。在庫切れにした品目はここに出てこない（自動で0になる）。</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">受取</h3>
+    <p style="font-size:14.5px;margin-bottom:8px"><strong>いつ：</strong>朝イチと、受け取るとき。</p>
+    <p style="font-size:14.5px;margin-bottom:0;color:var(--muted)">時間・店舗・配達か店舗受取か・住所（地図リンク）・電話・<strong>支払方法と支払金額</strong>が出る。受け取ったら「受取済みにする」。</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">注文</h3>
+    <p style="font-size:14.5px;margin-bottom:8px"><strong>いつ：</strong>卓上注文を使う大会のとき。</p>
+    <p style="font-size:14.5px;margin-bottom:0;color:var(--muted)">プレイヤーからの注文が出る。「届けに行く」を押してから持っていき、渡したら「完了」。品切れなら「取消」。</p>
+  </div>
+</div>
+
+<h3>賞味期限の帯について</h3>
+<p>画面の上に出っぱなしになる。<strong>閉じられない。</strong>消すには在庫切れにするか、期限切れ数を入れるしかない。</p>
+<div class="demo y">あと12分で カレードーナツ が期限切れです</div>
+<div class="demo r">チョコファッション ほか2品目 が期限切れになりました。</div>
+<p style="color:var(--muted);font-size:14.5px">赤い帯には数を入れる欄がついている。<strong>期限切れタブに移らなくても、帯の中で入れて「登録」でいい。</strong>最初の1回だけ音が鳴って振動する。</p>
+
+<h2 id="rules"><span class="no">06</span>これだけは守ること</h2>
+<ul class="rules">
+  <li>
+    <span class="head">品切れはその場で押す</span>
+    <span class="why">何時に切れたかが分からないと、次の大会で何個頼めばいいかが決められない。閉店後にまとめて入れると、この時刻がまるごと失われる。前回の大会では、品切れが10品目あって記録は0件だった。</span>
+  </li>
+  <li>
+    <span class="head">期限切れ数は受取の時間帯ごとに分ける</span>
+    <span class="why">11時受取と17時受取で同じ品目があるとき、残りを合算して片方に入れない。在庫数より多い数になって、集計がマイナスになる。画面も受取ごとに分かれている。</span>
+  </li>
+  <li>
+    <span class="head">注文担当の端末は開きっぱなしにする</span>
+    <span class="why">通知は画面を開いている間しか鳴らない。画面を閉じると注文に気づけない。1台決めて、充電しながら開いておく。</span>
+  </li>
+</ul>
+
+<h2 id="faq"><span class="no">07</span>よくある質問</h2>
+<p class="sub">毎回聞かれるもの。先にここを見てほしい。</p>
+
+<div class="faqgroup">ログイン</div>
+
+<details>
+  <summary>PINが通らない</summary>
+  <div>
+    <ul>
+      <li><strong>大会を間違えていないか。</strong>PINは大会ごとに違う。上の「大会」の欄が合っているか見る。</li>
+      <li><strong>管理者PINを入れていないか。</strong>スタッフ画面はスタッフPIN。別物。</li>
+      <li><strong>全角で打っていないか。</strong>今のバージョンは全角数字でも通るように直してあるが、古い画面が残っていることがある。ページを再読み込みしてから半角で入れ直す。</li>
+      <li>PINの右の<strong>「表示」</strong>を押すと、入れた中身が見える。</li>
+    </ul>
+    <p>それでも駄目なら、PINを配った人に確認する。アプリ側では何も直せない。</p>
+  </div>
+</details>
+
+<details>
+  <summary>大会がリストに出てこない</summary>
+  <div><p>その大会が「非表示」になっている。管理者が管理画面で「表示」に切り替えれば出る。終わった大会は非表示にしてあるので、<strong>前の大会を探しても出てこないのが正常。</strong></p></div>
+</details>
+
+<details>
+  <summary>人が交代するとき、どうするか</summary>
+  <div><p>右上の<strong>「切替」</strong>を押して、名前を入れ直す。大会とPINはそのままでいい。これをやらないと、前の人の名前で記録が残る。</p></div>
+</details>
+
+<div class="faqgroup">在庫切れ</div>
+
+<details>
+  <summary>「在庫切れ」はいつ押すのか</summary>
+  <div><p><strong>その品目が売り切れて、お客様に出せなくなった瞬間。</strong>残り1個になったときではない。0個になったとき。</p><p>押すと、その時刻・品目・押した人がその場でスプレッドシートに残る。デジタルPOPもすぐ「SOLD OUT」に変わる。</p></div>
+</details>
+
+<details>
+  <summary>押し忘れた。後から入れられるか</summary>
+  <div><p>入れられる。品目を選ぶと<strong>時刻の欄</strong>が出るので、<code>21:30</code> のように実際に切れた時刻を入れて記録する。備考欄に「気づくのが遅れた」などと書いてもいい。</p><p>深夜0時〜4時台の時刻は、その日の翌日として扱われる。<strong>未来の時刻は入れられない。</strong></p></div>
+</details>
+
+<details>
+  <summary>間違えて在庫切れにした</summary>
+  <div><p>在庫切れ記録タブで、その品目の<strong>「取消」</strong>を押す。元に戻る。記録自体は「取消」として残るので、消えてなくなるわけではない。</p></div>
+</details>
+
+<details>
+  <summary>品切れなのに期限切れタブに出てこない</summary>
+  <div><p>正常。<strong>在庫切れにした品目は期限切れタブから消える。</strong>捨てる分はゼロなので、自動で0として記録される。数を入れる必要はない。</p></div>
+</details>
+
+<div class="faqgroup">期限切れ</div>
+
+<details>
+  <summary>「期限切れ数」には何を入れるのか</summary>
+  <div><p><strong>賞味期限が来て、捨てる数。</strong>売れた数ではない。残っていた数。</p><p>0なら0と入れる。空欄のままだと送信されない。</p></div>
+</details>
+
+<details>
+  <summary>11時受取と17時受取で同じ品目がある。どっちに入れるのか</summary>
+  <div><p><strong>それぞれ別に数えて、別々に入れる。</strong>画面も「11:00 受取分」「17:00 受取分」で分かれている。</p><p>合算して片方に入れると、在庫数より多い数になって集計がおかしくなる。実際にこれが起きて、消費数がマイナスになった行がある。</p></div>
+</details>
+
+<details>
+  <summary>「在庫数より多い期限切れ数があります」と出た</summary>
+  <div><p>入れた数が、設定してある在庫数より多い。だいたい次のどれか。</p>
+  <ul>
+    <li>受取の時間帯を混ぜて数えた（いちばん多い）</li>
+    <li>そもそも届いた数が設定と違った</li>
+    <li>打ち間違い</li>
+  </ul>
+  <p>心当たりがなく、本当にその数なら「OK」で進んでいい。<strong>ただし後で管理者に伝える。</strong>在庫設定の数が実態と違っている可能性がある。</p></div>
+</details>
+
+<details>
+  <summary>赤い帯が消えない</summary>
+  <div><p>その受取の品目が、まだ1つも処理されていない。<strong>在庫切れにするか、期限切れ数を入れて「登録」すると消える。</strong></p><p>帯の中の欄に数を入れて登録すれば、タブを移動しなくていい。登録したのに消えないときは、他にもう1件期限切れがある。帯は切れたものから順に並ぶ。</p></div>
+</details>
+
+<details>
+  <summary>音が鳴らない</summary>
+  <div><p>スマホがマナーモードか、音量が0か、画面を一度もタップしていない。<strong>ブラウザは最初のタップがあるまで音を出せない決まりになっている。</strong>どこか1回タップしておく。</p><p>音は受取ごとに1回だけ。帯は出っぱなしなので、音を逃しても見れば分かる。</p></div>
+</details>
+
+<details>
+  <summary>賞味期限の帯が出ない品目がある</summary>
+  <div><p>その品目に賞味期限が設定されていない。帯は期限が入っているものにしか出ない。管理者に伝えて入れてもらう。</p></div>
+</details>
+
+<div class="faqgroup">受取</div>
+
+<details>
+  <summary>「受取済みにする」は押さないと駄目か</summary>
+  <div><p><strong>押してほしい。</strong>誰が何時に受け取ったかが残る。画面上部に「受取済み 3/8件」と出るので、受け取り漏れがひと目で分かる。</p><p>押すとカードが緑になって「受取済み 17:08・田中」と出る。間違えたら「取消」で戻せる。</p></div>
+</details>
+
+<details>
+  <summary>支払いはどこで見るのか</summary>
+  <div><p>受取タブの、薄い黄色の枠。<strong>支払方法</strong>と<strong>支払金額</strong>が2行で出る。金額は大きく表示される。</p><p>「13日カード払い」「請求書払い」「支払い済み」「都度現地決済」などと書いてある。<strong>現地で払うものだけ、その場で払う。</strong></p></div>
+</details>
+
+<details>
+  <summary>「支払い無し」と出ている</summary>
+  <div><p>元のシートに何も書かれていない、という意味。<strong>払わなくていい、とは限らない。</strong>金額欄も「支払い無し」なら、その店舗の支払いは別途処理されているか、単に入力されていない。</p><p>現地で請求されたら、払わずに管理者に連絡する。</p></div>
+</details>
+
+<details>
+  <summary>受け取った数が設定と違う</summary>
+  <div><p>届いた実数で動く。期限切れ数を入れるときに「在庫数より多い」と出るが、そのまま進めていい。<strong>違っていたことを管理者に伝える。</strong>次の大会の設定に反映される。</p></div>
+</details>
+
+<div class="faqgroup">卓上注文</div>
+
+<details>
+  <summary>注文が入ったらどうするか</summary>
+  <div><ol style="padding-left:1.3em;margin:0">
+    <li>注文タブに出る。音が鳴って帯が出る。</li>
+    <li><strong>「届けに行く」</strong>を押す。これで他のスタッフに「自分が行く」と伝わる。</li>
+    <li>持っていって、渡す。ドリチケはその場で受け取る。</li>
+    <li><strong>「完了」</strong>を押す。一覧から消える。</li>
+  </ol><p style="margin-top:12px;margin-bottom:0">品切れで渡せないときは「取消」。理由を選ぶと、プレイヤーの画面に出る。</p></div>
+</details>
+
+<details>
+  <summary>注文が入ると在庫は減るのか</summary>
+  <div><p><strong>減らない。</strong>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおりスタッフが押す。</p><p>だから<strong>注文は受付であって、渡せる保証ではない。</strong>品切れなら取り消す。</p></div>
+</details>
+
+<details>
+  <summary>QRはテーブルごとに違うのか</summary>
+  <div><p><strong>違わない。大会に1枚。</strong>全テーブルに同じものを置く。プレイヤーが読み取ってから、テーブル番号と席番号を自分で選ぶ。刷り分けは要らない。</p><p>登録していないテーブル番号は選べないので、存在しない卓への誤配達は起きない。</p></div>
+</details>
+
+<details>
+  <summary>注文を止めたい</summary>
+  <div><p>管理画面の注文設定で<strong>「受付を停止する」</strong>。すぐ止まる。再開も同じところ。QRを刷り直す必要はない。</p><p>未完了の注文が50件を超えると、自動で受付が止まる。</p></div>
+</details>
+
+<details>
+  <summary>同じ人が何回も注文してくる</summary>
+  <div><p>制限がかかっている。<strong>1回の注文は合計5個・5種類まで。同じ席は60秒に1件。同じテーブルは10分に5件まで。</strong>それ以上は弾かれる。</p></div>
+</details>
+
+<div class="faqgroup">デジタルPOP</div>
+
+<details>
+  <summary>値段が「ドリチケ◯枚」になっている</summary>
+  <div><p>正しい。<strong>現金販売ではない。</strong>ドリンクチケットの枚数で表示する。渡すときにその枚数を受け取る。</p></div>
+</details>
+
+<details>
+  <summary>POPに写真が出ない品目がある</summary>
+  <div><p>写真が登録されていない。管理画面のPOP設定から登録できる。スタッフ側で急いで直すものではない。</p></div>
+</details>
+
+<details>
+  <summary>POPが固まった／更新されない</summary>
+  <div><p>30秒ごとに自動で取り直している。止まって見えるときは<strong>ページを再読み込み</strong>する。前回の表示が残っている間は「前回の表示のまま」と帯が出る。</p><p>長時間つけっぱなしでも重くならないように作ってあるが、丸一日つけたら一度リロードしておくと確実。</p></div>
+</details>
+
+<div class="faqgroup">通信・端末</div>
+
+<details>
+  <summary>電波が無いところで押した</summary>
+  <div><p>大丈夫。<strong>端末に貯めて、つながったときに自動で送る。</strong>画面には「未送信が2件あります」と出て、品目には「送信待ち」と出る。</p><p>そのままにしておけば勝手に送られる。<strong>ブラウザのタブを閉じてしまうと送信が止まる</strong>ので、電波が戻るまで開いておく。</p></div>
+</details>
+
+<details>
+  <summary>画面を閉じていいか</summary>
+  <div><p>記録するだけなら閉じていい。ただし<strong>未送信が残っているときと、注文担当の端末は開いておく。</strong>通知は画面を開いている間しか鳴らない。</p></div>
+</details>
+
+<details>
+  <summary>「◯分前に更新」と出ている</summary>
+  <div><p>最後にサーバーから取り直した時刻。30秒ごとに自動で更新される。<strong>これが3分以上前のままなら、つながっていない。</strong>電波を確認して「更新」を押す。</p><p>この表示があるおかげで、「注文が来ていない」のか「つながっていない」のかを区別できる。</p></div>
+</details>
+
+<details>
+  <summary>押したデータはどこに入るのか</summary>
+  <div><p>Googleスプレッドシート「JOPT 軽食在庫管理」。押した瞬間に入る。</p>
+  <ul>
+    <li><strong>在庫切れログ</strong>＝いつ何が切れたか</li>
+    <li><strong>日次残数</strong>＝在庫数・期限切れ数・消費数</li>
+    <li><strong>受取記録</strong>＝誰が何時に受け取ったか</li>
+    <li><strong>注文</strong>＝卓上注文の明細</li>
+  </ul>
+  <p>大会ごとの集計シートで、品目別の期限切れ率が自動で出る。<strong>これが次の発注数の根拠になる。</strong>だから記録が抜けると困る。</p></div>
+</details>
+
+<details>
+  <summary>二重に押してしまった</summary>
+  <div><p>問題ない。同じ記録が二重に入らないようになっている。他のスタッフが先に押していた場合も、先に押した人の記録が残る。</p></div>
+</details>
+
+<footer>
+  <p style="margin-bottom:4px"><strong>分からないことがあったら、押す前に聞く。</strong>押してから直すほうが手間がかかる。</p>
+  <p style="margin:0">このページは現場向けの手引き。アプリの中身の仕様は、リポジトリの AGENTS.md・ORDER.md・SETUP-ORDER.md にある。</p>
+</footer>
+
+</div>
+</body>
+</html>
