@@ -178,15 +178,31 @@ function wakeAudio() {
   try { if (!AL.ctx) AL.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (AL.ctx.state === 'suspended') AL.ctx.resume(); } catch (e) {}
 }
 document.addEventListener('pointerdown', wakeAudio, { once: false, passive: true });
+/* 鈴の音。
+ * 鐘や鈴は倍音が整数比に並ばない（2倍・3倍…にならない）のが特徴で、そこが単純なビープと違う。
+ * [周波数の比, 大きさ, 減衰の長さ] を重ね、高い倍音ほど速く消すと撞いた鈴に近くなる。
+ * 立ち上がりは4ミリ秒。ここを緩めると鈴ではなく笛に聞こえる。 */
+const BELL = [[1, 1, 1], [2.02, 0.52, 0.72], [2.98, 0.34, 0.55], [4.07, 0.22, 0.42], [5.41, 0.13, 0.3]];
 function beep(times) {
   wakeAudio();
   const c = AL.ctx; if (!c || c.state !== 'running') return;
-  for (let i = 0; i < (times || 2); i++) {
-    const t0 = c.currentTime + i * 0.28, o = c.createOscillator(), g = c.createGain();
-    o.type = 'sine'; o.frequency.value = 880;
-    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + 0.24);
+  for (let i = 0; i < (times || 1); i++) {
+    const t0 = c.currentTime + i * 0.42;          // 余韻が長いので、前の音に少し重ねて鳴らす
+    const mix = c.createGain();
+    mix.gain.value = 0.12;                        // 倍音を足すぶん、1本ずつは小さくする
+    mix.connect(c.destination);
+    BELL.forEach(function (p, k) {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine';
+      o.frequency.value = 1180 * p[0];
+      if (k >= 3) o.detune.value = k === 3 ? 7 : -9;   // 高い倍音を少しずらすと金属らしい揺れが出る
+      const dur = 1.25 * p[2];
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(p[1], t0 + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(mix);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    });
   }
 }
 function buzz() { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
