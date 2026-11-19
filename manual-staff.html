@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="イベント中にアルバイトが触る操作だけをまとめた手引き。やることは3つ。">
+<style>
+/* GitHub Pages で単体で開くときの土台。Artifact 側の既定と同じにしてある */
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>アルバイト用 かんたん手引き</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* 現場で立ったまま読む前提。字を大きく、1画面に1つのことだけ置く。
+   色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ） */
+:root{
+  --bg:#f7f6f3; --surface:#ffffff; --fg:#1c1b19; --muted:#6b6862; --line:#e2dfd8;
+  --accent:#1558c0; --accent-weak:#e8f0fd;
+  --warn:#9a6700; --warn-bg:#fff8e1; --warn-line:#f0d890;
+  --danger:#a52019; --danger-bg:#fdecea; --danger-line:#f3c3bf;
+  --ok:#1e6b31; --ok-bg:#f1f9f3; --ok-line:#bfe0c7;
+  --display:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --body:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17160f; --surface:#211f19; --fg:#efece4; --muted:#a39e92; --line:#38352c;
+  --accent:#8ab4f8; --accent-weak:#1e2a3d;
+  --warn:#f0c04a; --warn-bg:#2d2512; --warn-line:#5a4a1d;
+  --danger:#f2938c; --danger-bg:#331c1a; --danger-line:#5e302c;
+  --ok:#8cd6a0; --ok-bg:#15271a; --ok-line:#2c4a33;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#17160f; --surface:#211f19; --fg:#efece4; --muted:#a39e92; --line:#38352c;
+  --accent:#8ab4f8; --accent-weak:#1e2a3d;
+  --warn:#f0c04a; --warn-bg:#2d2512; --warn-line:#5a4a1d;
+  --danger:#f2938c; --danger-bg:#331c1a; --danger-line:#5e302c;
+  --ok:#8cd6a0; --ok-bg:#15271a; --ok-line:#2c4a33;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.8;margin:0;font-size:17px;-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 72px}
+header{padding-block:36px 10px}
+h1{font-family:var(--display);font-weight:900;font-size:clamp(28px,7vw,40px);line-height:1.25;margin:0 0 10px;text-wrap:balance}
+.lede{color:var(--muted);font-size:17px;margin:0}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(21px,5vw,27px);line-height:1.35;margin:48px 0 10px;text-wrap:balance;scroll-margin-top:16px}
+h2 .no{display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--accent);color:#fff;font-size:.7em;margin-right:.5em;vertical-align:.1em}
+p{margin:0 0 14px}
+a{color:var(--accent)}
+strong{font-weight:700}
+
+/* 3つだけ */
+.three{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:0 0 8px;padding:0;list-style:none}
+.three li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+.three svg{display:block;margin:0 auto 10px}
+.three b{font-family:var(--display);font-size:19px;display:block;margin-bottom:4px}
+.three span{color:var(--muted);font-size:15px}
+
+/* 手順 */
+.steps{list-style:none;counter-reset:s;margin:0 0 16px;padding:0;display:grid;gap:12px}
+.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px 16px 58px;position:relative;min-width:0}
+.steps li::before{content:counter(s);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--display);font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center}
+.steps b{font-family:var(--display);font-size:18px}
+
+/* 注意 */
+.note{border-radius:12px;padding:16px 18px;margin:0 0 16px;font-size:16px;border:1px solid}
+.note b{font-family:var(--display)}
+.note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+.note.warn b{color:var(--warn)}
+.note.danger{background:var(--danger-bg);border-color:var(--danger-line)}
+.note.danger b{color:var(--danger)}
+.note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+.note.ok b{color:var(--ok)}
+
+/* 図 */
+figure{margin:0 0 18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 16px 12px}
+figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--fg)}
+figcaption{color:var(--muted);font-size:14.5px;margin-top:10px;text-align:center}
+
+/* 困ったら */
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+details[open]{border-color:var(--accent)}
+summary{cursor:pointer;padding:16px 18px;font-family:var(--display);font-weight:700;font-size:17px;list-style:none;line-height:1.6}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"＋";float:right;color:var(--accent)}
+details[open] summary::after{content:"－"}
+details>div{padding:0 18px 16px;border-top:1px solid var(--line);padding-top:14px;font-size:16px}
+details p:last-child{margin-bottom:0}
+
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <h1>アルバイト用<br>かんたん手引き</h1>
+  <p class="lede">イベント中にあなたが触るのは、この3つだけ。</p>
+</header>
+
+<ul class="three">
+  <li>
+    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="箱を受け取る絵">
+      <rect x="10" y="18" width="44" height="24" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <line x1="10" y1="26" x2="54" y2="26" stroke="currentColor" stroke-width="2.5"/>
+      <line x1="32" y1="18" x2="32" y2="42" stroke="currentColor" stroke-width="2.5"/>
+      <polyline points="22,12 32,4 42,12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <b>受け取ったら押す</b><span>受取タブ</span>
+  </li>
+  <li>
+    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="空の皿の絵">
+      <path d="M8 30 Q32 44 56 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="20" y1="36" x2="44" y2="36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="22" y1="8" x2="42" y2="24" stroke="#a52019" stroke-width="3" stroke-linecap="round"/>
+      <line x1="42" y1="8" x2="22" y2="24" stroke="#a52019" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <b>なくなったら押す</b><span>在庫切れ記録タブ</span>
+  </li>
+  <li>
+    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="時計の絵">
+      <circle cx="32" cy="26" r="16" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <polyline points="32,16 32,26 40,30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="32" y1="4" x2="32" y2="8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <b>期限が来たら数を入れる</b><span>赤い帯のなか</span>
+  </li>
+</ul>
+
+<p>注文を使うイベントでは、ここに<strong>「注文が来たら届ける」</strong>が足される。下で説明する。</p>
+
+<h2><span class="no">1</span>画面のどこを触るか</h2>
+
+<figure>
+  <svg viewBox="0 0 400 392" role="img" aria-label="画面の上に賞味期限の帯があり、その下に4つのタブが並ぶ。それぞれのタブをいつ触るかを示した図">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <rect x="6" y="6" width="388" height="56" rx="8" fill="#b3261e"/>
+    <text x="22" y="30" font-size="15" font-weight="700" fill="#fff">うえに出る帯</text>
+    <text x="22" y="50" font-size="12.5" fill="#fff">期限が近い・切れた、と知らせる。閉じられない</text>
+
+    <rect x="6" y="80" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="81" y="108" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">在庫切れ記録</text>
+    <line x1="162" y1="102" x2="186" y2="102" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
+    <text x="196" y="107" font-size="13.5" fill="currentColor">売り切れた そのとき</text>
+
+    <rect x="6" y="142" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="81" y="170" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">期限切れ</text>
+    <line x1="162" y1="164" x2="186" y2="164" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
+    <text x="196" y="169" font-size="13.5" fill="currentColor">捨てる数を数えたとき</text>
+
+    <rect x="6" y="204" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="81" y="232" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">受取</text>
+    <line x1="162" y1="226" x2="186" y2="226" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
+    <text x="196" y="231" font-size="13.5" fill="currentColor">朝イチと受け取るとき</text>
+
+    <rect x="6" y="266" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="81" y="294" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">注文</text>
+    <line x1="162" y1="288" x2="186" y2="288" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
+    <text x="196" y="293" font-size="13.5" fill="currentColor">鈴が鳴ったとき</text>
+
+    <rect x="6" y="328" width="388" height="56" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="200" y="352" font-size="13" text-anchor="middle" fill="currentColor">いちばん下に「最終更新 ◯:◯◯」</text>
+    <text x="200" y="372" font-size="13" text-anchor="middle" fill="currentColor">3分以上前のままなら、つながっていない</text>
+  </svg>
+  <figcaption>触るのは4つのタブだけ。帯は上に出っぱなしで、閉じられない。</figcaption>
+</figure>
+
+<h2><span class="no">2</span>受け取ったとき</h2>
+
+<figure>
+  <svg viewBox="0 0 520 230" role="img" aria-label="受取タブのカード。時間と店名、支払いの黄色い枠、緑の受取済みボタンが並ぶ">
+    <rect x="12" y="12" width="496" height="206" rx="12" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="34" y="52" font-size="24" font-weight="700" fill="currentColor">17:00</text>
+    <text x="118" y="52" font-size="18" font-weight="700" fill="currentColor">テスト弁当店</text>
+    <rect x="34" y="64" width="74" height="22" rx="11" fill="#e8f0fd"/>
+    <text x="71" y="80" font-size="12.5" font-weight="700" text-anchor="middle" fill="#174ea6">店舗受取</text>
+
+    <rect x="34" y="96" width="452" height="54" rx="8" fill="#fff8e1" stroke="#f0d890" stroke-width="1.5"/>
+    <text x="48" y="117" font-size="12.5" fill="#6b6862">支払方法</text>
+    <text x="126" y="118" font-size="15" font-weight="700" fill="#1c1b19">13日カード払い</text>
+    <text x="48" y="140" font-size="12.5" fill="#6b6862">支払金額</text>
+    <text x="126" y="142" font-size="19" font-weight="700" fill="#1c1b19">38,000円</text>
+
+    <rect x="34" y="164" width="452" height="38" rx="9" fill="#1e8e3e"/>
+    <text x="260" y="189" font-size="16" font-weight="700" text-anchor="middle" fill="#fff">受取済みにする</text>
+  </svg>
+  <figcaption>黄色い枠が支払い。現地で払うものだけ、その場で払う。</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><b>数を数える。</b>頼んだ数と合っているか見る。</li>
+  <li><b>支払いを見る。</b>黄色い枠に「都度現地決済」などと書いてあれば、その場で払う。「支払い済み」なら払わない。</li>
+  <li><b>緑のボタンを押す。</b>カードが緑になって、あなたの名前と時刻が残る。</li>
+</ol>
+
+<div class="note warn"><b>「支払い無し」と出たら、払わずに社員を呼ぶ。</b>「払わなくていい」ではなく「何も書かれていない」という意味。現地で請求されたら、その場で払わない。</div>
+
+<h2><span class="no">3</span>売り切れたとき</h2>
+
+<ol class="steps">
+  <li><b>在庫切れ記録タブを開く。</b></li>
+  <li><b>なくなった品目をタップする。</b>選ぶと色が変わる。</li>
+  <li><b>記録を押す。</b>これだけ。</li>
+</ol>
+
+<div class="note danger"><b>0個になった瞬間に押す。</b>残り1個のときではない。あとでまとめて入れると、何時に切れたかが残らない。次のイベントで何個頼むかが決められなくなる。</div>
+
+<p>押し忘れたら、品目を選んだときに出る<strong>時刻の欄</strong>に <strong>21:30</strong> のように手で入れれば、実際の時刻で残せる。間違えたら「取消」で戻せる。</p>
+
+<h2><span class="no">4</span>賞味期限が来たとき</h2>
+
+<figure>
+  <svg viewBox="0 0 520 206" role="img" aria-label="30分前に黄色い帯が出て、期限を過ぎると赤い帯に変わり、赤い帯のなかに個数の欄と登録ボタンが出る図">
+    <defs>
+      <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <rect x="12" y="12" width="496" height="42" rx="8" fill="#f9ab00"/>
+    <text x="32" y="39" font-size="16" font-weight="700" fill="#202124">あと12分で カレーパン が期限切れです</text>
+
+    <line x1="260" y1="62" x2="260" y2="84" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
+    <text x="276" y="79" font-size="13" fill="currentColor">時間が過ぎると</text>
+
+    <rect x="12" y="92" width="496" height="100" rx="8" fill="#b3261e"/>
+    <text x="32" y="120" font-size="16" font-weight="700" fill="#fff">カレーパン が期限切れになりました。</text>
+    <text x="32" y="150" font-size="13" fill="#fff">カレーパン</text>
+    <rect x="110" y="134" width="70" height="30" rx="6" fill="#fff"/>
+    <text x="145" y="155" font-size="15" font-weight="700" text-anchor="middle" fill="#202124">6</text>
+    <rect x="196" y="134" width="88" height="30" rx="6" fill="#fff"/>
+    <text x="240" y="155" font-size="14.5" font-weight="700" text-anchor="middle" fill="#b3261e">登録</text>
+    <text x="32" y="181" font-size="12.5" fill="#fff">捨てる数を入れて押すと、この帯が消える</text>
+  </svg>
+  <figcaption>赤い帯のなかで数を入れて登録できる。タブを移動しなくていい。</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><b>残っている数を数える。</b>売れた数ではない。<strong>捨てる数</strong>。</li>
+  <li><b>赤い帯の欄に入れて「登録」。</b>0なら0と入れる。空のままだと送られない。</li>
+  <li><b>帯が消えたら終わり。</b>消えなければ、ほかにもう1件ある。</li>
+</ol>
+
+<div class="note warn"><b>11時ぶんと17時ぶんは別々に数える。</b>同じ品目でも帯や画面が分かれている。足して片方に入れると、在庫より多い数になって集計が狂う。</div>
+
+<h2><span class="no">5</span>注文が来たとき</h2>
+
+<figure>
+  <svg viewBox="0 0 400 324" role="img" aria-label="お客がQRから注文し、スタッフの画面に鈴とともに出て、届けに行くを押し、渡して完了を押すまでの流れ">
+    <defs>
+      <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <rect x="6" y="6" width="388" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="200" y="32" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">お客が卓のQRで注文する</text>
+    <text x="200" y="52" font-size="12.5" text-anchor="middle" fill="currentColor">卓と席は自分で選ぶ</text>
+    <line x1="200" y1="66" x2="200" y2="82" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
+
+    <rect x="6" y="86" width="388" height="56" rx="10" fill="none" stroke="#1558c0" stroke-width="2.5"/>
+    <text x="200" y="112" font-size="15" font-weight="700" text-anchor="middle" fill="#1558c0">鈴が鳴って、注文タブに出る</text>
+    <text x="200" y="132" font-size="12.5" text-anchor="middle" fill="currentColor">画面を閉じていると鳴らない</text>
+    <line x1="200" y1="146" x2="200" y2="162" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
+
+    <rect x="6" y="166" width="388" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="200" y="192" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">「届けに行く」を押す</text>
+    <text x="200" y="212" font-size="12.5" text-anchor="middle" fill="currentColor">「自分が行く」と他の人に伝わる</text>
+    <line x1="200" y1="226" x2="200" y2="242" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
+
+    <rect x="6" y="246" width="388" height="56" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2.5"/>
+    <text x="200" y="272" font-size="15" font-weight="700" text-anchor="middle" fill="#1e6b31">渡して「完了」を押す</text>
+    <text x="200" y="292" font-size="12.5" text-anchor="middle" fill="currentColor">ドリチケはこのとき受け取る</text>
+  </svg>
+  <figcaption>ドリチケは渡すときに受け取る。品切れで渡せないときは「取消」。</figcaption>
+</figure>
+
+<p><strong>自分の担当する卓だけ出すこともできる。</strong>注文タブの上に「100番台」「200番台」のボタンが出たら、自分の階を押しておく。押した階の注文だけが出て、その階だけ鳴る。</p>
+
+<div class="note ok"><b>注文担当の端末は開きっぱなしにする。</b>画面を閉じると鈴が鳴らない。1台決めて、充電しながら置いておく。</div>
+
+<h2><span class="no">6</span>困ったら</h2>
+
+<details>
+  <summary>PINが通らない</summary>
+  <div><p>イベントを間違えていないか、上の欄を見る。PINの右の「表示」を押すと、入れた中身が見える。それでも駄目なら、PINを配った人に聞く。</p></div>
+</details>
+
+<details>
+  <summary>鈴が鳴らない</summary>
+  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。ブラウザは最初のタップがあるまで音を出せない決まりになっている。どこか1回タップしておく。</p><p>帯は出っぱなしなので、音を逃しても見れば分かる。</p></div>
+</details>
+
+<details>
+  <summary>電波が無いところで押した</summary>
+  <div><p>そのままでいい。端末に貯めて、つながったときに自動で送る。「未送信が2件あります」と出る。</p><p><strong>タブを閉じると送信が止まる。</strong>電波が戻るまで開いておく。</p></div>
+</details>
+
+<details>
+  <summary>人が交代する</summary>
+  <div><p>右上の「切替」を押して、名前を入れ直す。イベントとPINはそのままでいい。やらないと、前の人の名前で記録が残る。</p></div>
+</details>
+
+<details>
+  <summary>受け取った数が足りない</summary>
+  <div><p>届いた実数で進める。期限切れ数を入れるときに「在庫数より多い」と出ても、そのままでいい。<strong>違っていたことを社員に伝える。</strong></p></div>
+</details>
+
+<footer>
+  <p style="margin-bottom:4px"><strong>迷ったら、押す前に聞く。</strong>押してから直すほうが手間がかかる。</p>
+  <p style="margin:0">もっと細かいことは <a href="manual.html">現場マニュアル（詳しい版）</a>。準備や設定は <a href="manual-admin.html">管理者用</a>。</p>
+</footer>
+
+</div>
+
+</body></html>
