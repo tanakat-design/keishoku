@@ -74,7 +74,7 @@ const Logger = { last: '', log(m) { Logger.last = String(m); } };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify, markReceived };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify, markReceived, markSoldOut, cancelSoldOut, submitClose, hm_ };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -387,6 +387,41 @@ ok('受取記録シートが無くても画面は開ける', (function () {
   try { const d = X.getDayState('T1', '1234', today); return !!d && JSON.stringify(d.received) === '{}'; }
   catch (e) { return false; } finally { DB[X.SH.RECV] = keep; }
 })());
+
+// 11) 期限切れ数を先に送ってから在庫切れを押しても、日次残数に時刻が入る
+console.log('');
+console.log('[在庫切れ時刻の後入れ]');
+(function () {
+  DB[X.SH.LOG] = []; DB[X.SH.CLOSE] = [];
+  // 先に期限切れ数だけ送る（会場で閉店後にまとめて入力する流れ）
+  X.submitClose('T1', '1234', today, [{ item: 'からあげ弁当', remain: 0 }, { item: 'おにぎり', remain: 3 }], 'いかわ', Date.now());
+  const row = () => DB[X.SH.CLOSE].filter(r => r[3] === 'からあげ弁当')[0];
+  const other = () => DB[X.SH.CLOSE].filter(r => r[3] === 'おにぎり')[0];
+  ok('先に送った時点では時刻が空', DB[X.SH.CLOSE].length === 2 && !row()[7], JSON.stringify(row()));
+
+  // あとから在庫切れを押す
+  X.markSoldOut('T1', '1234', today, ['からあげ弁当'], 'いかわ', 'req-OUT1', Date.now(), '', '');
+  const hm = X.hm_(DB[X.SH.LOG][0][10]);
+  ok('あとから押した在庫切れ時刻が日次残数に入る', row()[7] === hm, 'cell=' + row()[7] + ' log=' + hm);
+  ok('押していない品目の時刻は空のまま', !other()[7], JSON.stringify(other()));
+  ok('期限切れ数は書き換えない', row()[5] === 0 && other()[5] === 3, row()[5] + '/' + other()[5]);
+  ok('日次残数の行は増えない', DB[X.SH.CLOSE].length === 2, 'rows=' + DB[X.SH.CLOSE].length);
+
+  // 取り消すと時刻も消える
+  X.cancelSoldOut('T1', '1234', today, 'からあげ弁当', 'いかわ');
+  ok('取消すと日次残数の時刻も消える', row()[7] === '', JSON.stringify(row()));
+
+  // 日次残数がまだ無い品目を在庫切れにしても落ちない
+  DB[X.SH.LOG] = [];
+  X.markSoldOut('T1', '1234', today, ['夜食パン'], 'いかわ', 'req-OUT2', Date.now(), '', '');
+  ok('日次残数が無くても落ちない', DB[X.SH.CLOSE].length === 2 && DB[X.SH.LOG].length === 1, 'close=' + DB[X.SH.CLOSE].length + ' log=' + DB[X.SH.LOG].length);
+
+  // 在庫切れが先なら、これまでどおり submitClose が時刻を入れる
+  DB[X.SH.LOG] = []; DB[X.SH.CLOSE] = [];
+  X.markSoldOut('T1', '1234', today, ['おにぎり'], 'いかわ', 'req-OUT3', Date.now(), '', '');
+  X.submitClose('T1', '1234', today, [{ item: 'おにぎり', remain: 0 }], 'いかわ', Date.now());
+  ok('先に在庫切れでも時刻が入る（従来どおり）', other()[7] === X.hm_(DB[X.SH.LOG][0][10]), JSON.stringify(other()));
+})();
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
 console.log('\n合格 ' + pass + ' / 不合格 ' + fail);

@@ -44,9 +44,10 @@
   - `getDayState(tid, pin, date)`
   - `markSoldOut(tid, pin, date, names[], staff, reqId, clientAt, outAt, note)`
     - outAt は 'HH:MM' または空。0〜4時台は開催日の翌日として扱う。未来の時刻はエラーにする。
-  - `cancelSoldOut(tid, pin, date, name, staff)`
+  - `cancelSoldOut(tid, pin, date, name, staff)`：取り消すと日次残数の在庫切れ時刻も消す
   - `submitClose(tid, pin, date, entries[{item, remain}], staff, clientAt)`
     - 送信された品目だけを上書き保存する。
+    - `submitClose` は**実行した瞬間の**在庫切れ時刻を日次残数に写す。そのため「期限切れ数を先に送る → あとから在庫切れを押す」の順だと時刻が空のままになっていた。`markSoldOut` が `syncCloseTime_` で既存の日次残数のH列を後から埋めるようにしてある（閉店後にまとめて入力する会場があるため）。
   - `markReceived(tid, pin, date, store, recv, staff, on, clientAt)`：受取を「受取済み」にする（on が false なら取消）。店舗×受取時間ごとに1行だけ持つので、押し直すと担当者と時刻が上書きされ、取消すと行が消える。在庫設定にある受取だけ受け付ける。**在庫は動かさない**（現物を受け取ったかどうかの記録だけ）。
 - 管理者用
   - `adminList(pin)`：品目ごとに 在庫数・店舗・受取時間・賞味期限・受取方法・住所・電話・**支払方法・支払金額**を返す。ここで返さない列があると、管理画面で開いて保存し直したときにその列が空で上書きされる（`toForm` が画面の値を作り、`fromForm` がそれをそのまま保存するため）

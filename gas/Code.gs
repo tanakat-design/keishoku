@@ -194,8 +194,26 @@ function markSoldOut(tid, pin, date, names, staff, reqId, clientAt, outAt, note)
       add.push([at, t.id, t.name, date, n, str_(staff), '有効', '', '', reqId || '', outTime, str_(note).slice(0, 200)]);
     });
     append_(SH.LOG, add);
+    // すでに期限切れ数を送ってある品目にも時刻を入れる。会場では閉店後にまとめて入力することがあり、
+    // 「期限切れ数を先に送る → あとから在庫切れを押す」の順だと日次残数が空のままになるため
+    syncCloseTime_(t.id, date, add.map(function (r) { return r[4]; }), hm_(outTime));
     return state_(t, date);
   });
+}
+
+/** 日次残数の在庫切れ時刻（H列）を後から書き換える。hm が空なら消す */
+function syncCloseTime_(tid, date, names, hm) {
+  if (!names || !names.length) return;
+  const set = {};
+  names.forEach(function (n) { set[str_(n)] = 1; });
+  const sh = sheet_(SH.CLOSE);
+  const rows = rows_(SH.CLOSE);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (str_(r[0]) !== tid || ds_(r[2]) !== date || !set[str_(r[3])]) continue;
+    if (rhm_(r[7]) === hm) continue; // 同じなら書かない（無駄な書き込みを減らす）
+    sh.getRange(i + 2, 8).setValue(hm);
+  }
 }
 
 function cancelSoldOut(tid, pin, date, name, staff) {
@@ -203,12 +221,16 @@ function cancelSoldOut(tid, pin, date, name, staff) {
   return withLock_(function () {
     const sh = sheet_(SH.LOG);
     const log = rows_(SH.LOG);
+    let hit = false;
     for (let i = log.length - 1; i >= 0; i--) {
       const r = log[i];
       if (str_(r[1]) === t.id && ds_(r[3]) === date && str_(r[4]) === name && str_(r[6]) === '有効') {
         sh.getRange(i + 2, 7, 1, 3).setValues([['取消', new Date(), str_(staff)]]);
+        hit = true;
       }
     }
+    // 取り消したら日次残数の時刻も消す。残すと、在庫切れでないのに時刻だけ残って集計が狂う
+    if (hit) syncCloseTime_(t.id, date, [name], '');
     return state_(t, date);
   });
 }
