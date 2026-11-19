@@ -63,7 +63,7 @@ const TIMEOUT = 25000;   // 1回の通信をあきらめるまで。会場の回
 const QUEUE_MS = 300000; // 送信待ちの有効期限（5分）。これを過ぎた注文は送らない。席を立っている・期限切れの恐れがあるため
 
 const q = new URLSearchParams(location.search);
-// QRは大会に1枚。卓と席はプレイヤーが選ぶ（卓ごとに刷り分けると印刷の手間が増えるため）
+// QRはイベントに1枚。卓と席はプレイヤーが選ぶ（卓ごとに刷り分けると印刷の手間が増えるため）
 const P = { tid: q.get('t') || '', token: q.get('k') || '' };
 const S = { view: 'load', err: '', data: null, imgs: {}, table: '', seat: '', qty: {}, busy: false, order: null, tick: null, poll: null, menu: [], gen: 0 };
 
@@ -181,7 +181,7 @@ async function flush() {
   try {
     const r = await call('placeOrder', j.tid, j.token, j.table, j.seat, j.items, j.reqId);
     setQueue(queue().filter(x => x.reqId !== j.reqId));
-    // いま選んでいる卓・大会の注文でなければ画面には出さない（卓を移ったあとに前の卓の再送が通った場合）
+    // いま選んでいる卓・イベントの注文でなければ画面には出さない（卓を移ったあとに前の卓の再送が通った場合）
     if (gen === S.gen && j.tid === P.tid && j.table === S.table) {
       S.order = { id: r.id, key: r.key, lines: r.lines };
       LS.set('kLastOrder', { id: r.id, key: r.key, tid: j.tid, table: j.table, at: Date.now() });
@@ -250,7 +250,7 @@ function render() {
       <div class="notice ${msg.k}">${esc(msg.t)}</div>
       ${ls.map(l => `<div class="st"><b style="flex:1">${esc(l.name)}${l.qty > 1 ? ' ×' + l.qty : ''}</b>${stateBadge(l.state)}</div>
         ${l.state === '取消' && l.reason ? `<div class="small" style="margin:-4px 0 8px">${esc(l.reason)}</div>` : ''}`).join('')}
-      ${going ? `<div class="notice info" style="margin-top:10px">${esc(going.by)}が届けに行きます。</div>` : ''}
+      ${going ? '<div class="notice info" style="margin-top:10px">スタッフが届けに行きます。</div>' : ''}
       <div class="small" style="margin-top:10px">ドリチケはお渡しのときにお預かりします。</div>
       <button class="btn sub" style="margin-top:12px" onclick="S.view='menu';render()">続けて注文する</button></div>`;
     bar.innerHTML = ''; return;

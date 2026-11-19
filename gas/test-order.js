@@ -80,17 +80,17 @@ const X = ctx.__x;
 /* ---- 下ごしらえ ---- */
 Object.keys(X.HEAD).forEach(n => { DB[n] = []; });
 const today = X.bizDate_();
-const TOK = 'TOK1111111111aa';   // 大会の注文トークン（QRは大会に1枚）
+const TOK = 'TOK1111111111aa';   // イベントの注文トークン（QRはイベントに1枚）
 const tomo = X.addDay_(today, 1); // 期限は翌日にして、何時に流しても結果が変わらないようにする
-DB[X.SH.TOURN].push(['T1', 'テスト大会', '1234', '有効', new Date(), '受付中', '', 'TOK1111111111aa']);
+DB[X.SH.TOURN].push(['T1', 'テストイベント', '1234', '有効', new Date(), '受付中', '', 'TOK1111111111aa']);
 DB[X.SH.TABLE].push(['T1', '3', 9, '', '有効', new Date()]);
 DB[X.SH.TABLE].push(['T1', '4', 9, '', '無効', new Date()]);
 DB[X.SH.POP].push(['からあげ弁当', 2, '', new Date()]);
 DB[X.SH.POP].push(['おにぎり', 1, '', new Date()]);
 // 在庫設定：受取07:00、期限は今日の23:59
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 1, 'からあげ弁当', 20, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 2, 'おにぎり', 10, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
-DB[X.SH.STOCK].push(['T1', 'テスト大会', today, 3, '夜食パン', 10, 'テスト店', '04:30', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テストイベント', today, 1, 'からあげ弁当', 20, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テストイベント', today, 2, 'おにぎり', 10, 'テスト店', '07:00', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
+DB[X.SH.STOCK].push(['T1', 'テストイベント', today, 3, '夜食パン', 10, 'テスト店', '04:30', tomo + ' 23:59', '店舗受け取り', '住所', '000']);
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) { if (cond) { pass++; console.log('  OK  ' + name); } else { fail++; console.log('  NG  ' + name + (extra ? ' … ' + extra : '')); } }
@@ -121,7 +121,7 @@ ok('02:00 は翌日', X.recvAt_('2026-11-09', '02:00') === '2026-11-10 02:00');
 ok('addDay_', X.addDay_('2026-11-30', 1) === '2026-12-01');
 
 console.log('--- onSale_ ---');
-const t1 = { id: 'T1', name: 'テスト大会', active: true, orderOpen: true, orderHours: '' };
+const t1 = { id: 'T1', name: 'テストイベント', active: true, orderOpen: true, orderHours: '' };
 const sale = X.onSale_(t1, today);
 ok('受取済みは注文できる', sale['からあげ弁当'] === true);
 ok('受取前（翌04:30）は注文できない', !sale['夜食パン']);
@@ -175,7 +175,7 @@ X.adminOrderOpen(PROPS.ADMIN_PIN, 'T1', true, '00:00-23:59');
 const o2 = X.placeOrder('T1', TOK, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'req-D');
 ok('再開したら注文できる', !!o2.id);
 
-console.log('--- 注文トークンの再発行（大会に1つ・QRも1枚） ---');
+console.log('--- 注文トークンの再発行（イベントに1つ・QRも1枚） ---');
 const before = TOK;
 const after = X.adminOrderToken(PROPS.ADMIN_PIN, 'T1').orderToken;
 ok('トークンが変わる', before !== after && after.length === 16, before + ' → ' + after);
@@ -247,17 +247,17 @@ ok('席は正規化して保存する', DB[X.SH.ORDER][0][6] === '2', DB[X.SH.OR
 // 4) 卓の制限は注文の数で数える（明細の数ではない）
 DB[X.SH.ORDER].length = 0;
 for (let i = 0; i < 4; i++) {
-  DB[X.SH.ORDER].push(['O' + i, 1, 'T1', 'テスト大会', today, '3', String(i + 1), 'おにぎり', 1, '1', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
-  DB[X.SH.ORDER].push(['O' + i, 2, 'T1', 'テスト大会', today, '3', String(i + 1), 'からあげ弁当', 1, '2', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
+  DB[X.SH.ORDER].push(['O' + i, 1, 'T1', 'テストイベント', today, '3', String(i + 1), 'おにぎり', 1, '1', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
+  DB[X.SH.ORDER].push(['O' + i, 2, 'T1', 'テストイベント', today, '3', String(i + 1), 'からあげ弁当', 1, '2', '完了', '', 'k', 'rr' + i, new Date(), '', '', '', new Date(), '']);
 }
 let okFive = true;
 try { X.placeOrder('T1', TOK3, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'rq5'); } catch (e) { okFive = false; }
 ok('明細8行でも注文4件なら5件目は通る', okFive);
 throws('注文5件目のあとは止まる', () => X.placeOrder('T1', TOK3, '3', '7', [{ name: 'おにぎり', qty: 1 }], 'rq6'), /続いています/);
-// 5) リクエストIDは大会をまたいで引き当てない
-DB[X.SH.TOURN].push(['T2', '別の大会', '9999', '有効', new Date(), '受付中', '', 'TOK2222222222bb']);
+// 5) リクエストIDはイベントをまたいで引き当てない
+DB[X.SH.TOURN].push(['T2', '別のイベント', '9999', '有効', new Date(), '受付中', '', 'TOK2222222222bb']);
 DB[X.SH.TABLE].push(['T2', '1', 9, '', '有効', new Date()]);
-throws('他の大会のリクエストIDでは引き当てられない', () => X.placeOrder('T2', 'wrongtoken', '1', '1', [{ name: 'おにぎり', qty: 1 }], 'rq5'), /QR/);
+throws('他のイベントのリクエストIDでは引き当てられない', () => X.placeOrder('T2', 'wrongtoken', '1', '1', [{ name: 'おにぎり', qty: 1 }], 'rq5'), /QR/);
 // 6) 同じ端末からの「届けに行く」の再送で、担当日時も通知も増えない
 DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
 const oz = X.placeOrder('T1', TOK3, '3', '4', [{ name: 'おにぎり', qty: 1 }], 'rq7');
@@ -266,9 +266,9 @@ const t1st = DB[X.SH.ORDER][0][17], n1 = DB[X.SH.NOTIFY].length;
 X.setOrder('T1', '1234', oz.id, 0, '配達中', '田中', 'devA', '');
 ok('再送しても担当日時が変わらない', DB[X.SH.ORDER][0][17] === t1st);
 ok('再送しても通知が増えない', DB[X.SH.NOTIFY].length === n1, DB[X.SH.NOTIFY].length + ' / ' + n1);
-// 7) 大会の保存で注文受付・受付時間を消さない（列数を HEAD に合わせる）
+// 7) イベントの保存で注文受付・受付時間を消さない（列数を HEAD に合わせる）
 const tRow = DB[X.SH.TOURN].find(r => r[0] === 'T1');
-ok('大会シートは HEAD と同じ列数（8列）', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中' && !!tRow[7], JSON.stringify(tRow));
+ok('イベントシートは HEAD と同じ列数（8列）', tRow.length === X.HEAD[X.SH.TOURN].length && tRow[5] === '受付中' && !!tRow[7], JSON.stringify(tRow));
 
 
 console.log('\n--- 2回目のレビュー（本番前の見直し）で見つかった分 ---');
@@ -276,7 +276,7 @@ console.log('\n--- 2回目のレビュー（本番前の見直し）で見つか
 ok('10:99 は受取時刻として読まない', X.hm2_('10:99') === '' && X.hm2_('10:30') === '10:30');
 ok('2026-02-31 は賞味期限として読まない', X.validDT_('2026-02-31 10:00') === false && X.validDT_('2026-02-28 10:00') === true);
 ok('25:00 や 10:70 は賞味期限として読まない', X.validDT_('2026-03-01 25:00') === false && X.validDT_('2026-03-01 10:70') === false);
-const form = { id: 'T1', name: 'テスト大会', staffPin: '1234', active: true,
+const form = { id: 'T1', name: 'テストイベント', staffPin: '1234', active: true,
   days: [{ date: today, items: [{ name: 'おにぎり', stock: 10, recv: '25:00', store: 'テスト店', exp: '' }] }] };
 throws('受取時間 25:00 は保存できない', () => X.adminSave(PROPS.ADMIN_PIN, form), /受取時間/);
 form.days[0].items[0].recv = '07:00'; form.days[0].items[0].exp = '2026-02-31 10:00';
@@ -315,7 +315,7 @@ ok('一覧の上限は受付停止の上限より大きい', X.ORD.LIST_MAX > X.
 ok('未完了が上限を超えても全部返る', (function () {
   DB[X.SH.ORDER].length = 0;
   for (let i = 0; i < X.ORD.OPEN_MAX + 4; i++) {
-    DB[X.SH.ORDER].push(['Z' + i, 1, 'T1', 'テスト大会', today, '3', '1', 'おにぎり', 1, '1', '受付', '', 'k', 'zz' + i, new Date(), '', '', '', '', '']);
+    DB[X.SH.ORDER].push(['Z' + i, 1, 'T1', 'テストイベント', today, '3', '1', 'おにぎり', 1, '1', '受付', '', 'k', 'zz' + i, new Date(), '', '', '', '', '']);
   }
   const list = X.openOrders_('T1', today);
   return list.length === X.ORD.OPEN_MAX + 4 && list[0].id === 'Z0';

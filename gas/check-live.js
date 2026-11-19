@@ -2,15 +2,15 @@
 /**
  * 本番の設定を外から点検する。
  *
- *   node gas/check-live.js                大会の一覧（IDつき）を出す
- *   node gas/check-live.js <大会ID>        その大会を点検する（今日の前後14日）
- *   node gas/check-live.js <大会ID> 30     前後30日を見る
+ *   node gas/check-live.js                イベントの一覧（IDつき）を出す
+ *   node gas/check-live.js <イベントID>        そのイベントを点検する（今日の前後14日）
+ *   node gas/check-live.js <イベントID> 30     前後30日を見る
  *
  * PINを使わない。getPopState を読むだけなので、何度流しても本番は変わらない。
- * 大会の設定漏れ（受取時間が空・賞味期限が受取より前・写真なし等）を機械的に拾う。
+ * イベントの設定漏れ（受取時間が空・賞味期限が受取より前・写真なし等）を機械的に拾う。
  * 要確認が1件でもあれば終了コード1で終わる。
  *
- * 非表示（無効）の大会は getPopState が返さないので、ここには出てこない。
+ * 非表示（無効）のイベントは getPopState が返さないので、ここには出てこない。
  */
 'use strict';
 const fs = require('fs');
@@ -63,9 +63,9 @@ async function main() {
 
   if (!tid) {
     const r = await call('getPopState');
-    console.log('表示中の大会：');
+    console.log('表示中のイベント：');
     (r.tournaments || []).forEach((t) => console.log('  %s  %s', t.id, t.name));
-    console.log('\n点検する：node gas/check-live.js <大会ID>');
+    console.log('\n点検する：node gas/check-live.js <イベントID>');
     return 0;
   }
 
@@ -82,11 +82,11 @@ async function main() {
 
   const days = got.filter(Boolean).sort((a, b) => (a[0] < b[0] ? -1 : 1));
   if (!days.length) {
-    console.log('前後%d日に品目のある日が無い。大会IDか期間を確かめる。', span);
+    console.log('前後%d日に品目のある日が無い。イベントIDか期間を確かめる。', span);
     return 1;
   }
 
-  console.log('大会：%s', days[0][1].name);
+  console.log('イベント：%s', days[0][1].name);
   console.log('期間：%s 〜 %s（前後%d日を確認）\n', dates[0], dates[dates.length - 1], span);
 
   const warn = [];

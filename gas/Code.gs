@@ -2,10 +2,10 @@
  * 軽食 在庫管理アプリ（Google Apps Script / スプレッドシート連携）
  *
  * シート構成
- *   大会         : 大会ID / 大会名 / スタッフPIN / 有効 / 更新日時
- *   在庫設定     : 大会ID / 大会名 / 開催日 / 表示順 / 品目 / 在庫数 / 店舗 / 受取時間 / 賞味期限 / 受取方法 / 住所 / 電話 / 支払方法 / 支払金額   ← 開催日ごとに設定
- *   在庫切れログ : 記録日時 / 大会ID / 大会名 / 開催日 / 品目 / 入力者 / 状態 / 取消日時 / 取消者 / リクエストID / 在庫切れ時刻 / 備考
- *   日次残数     : 大会ID / 大会名 / 開催日 / 品目 / 在庫数 / 期限切れ数 / 消費数 / 在庫切れ時刻 / 入力者 / 記録日時
+ *   イベント         : イベントID / イベント名 / スタッフPIN / 有効 / 更新日時
+ *   在庫設定     : イベントID / イベント名 / 開催日 / 表示順 / 品目 / 在庫数 / 店舗 / 受取時間 / 賞味期限 / 受取方法 / 住所 / 電話 / 支払方法 / 支払金額   ← 開催日ごとに設定
+ *   在庫切れログ : 記録日時 / イベントID / イベント名 / 開催日 / 品目 / 入力者 / 状態 / 取消日時 / 取消者 / リクエストID / 在庫切れ時刻 / 備考
+ *   日次残数     : イベントID / イベント名 / 開催日 / 品目 / 在庫数 / 期限切れ数 / 消費数 / 在庫切れ時刻 / 入力者 / 記録日時
  */
 
 const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
@@ -16,7 +16,7 @@ const HEAD = {
   [SH.STOCK]: ['大会ID', '大会名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話', '支払方法', '支払金額'],
   [SH.LOG]: ['記録日時', '大会ID', '大会名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['大会ID', '大会名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
-  [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。大会をまたいで使い回す
+  [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。イベントをまたいで使い回す
   [SH.TABLE]: ['大会ID', '卓番号', '席数', 'トークン', '有効', '更新日時'], // 卓上注文のQR。トークンを作り直すと過去のQRが一斉に失効する
   [SH.ORDER]: ['注文ID', '明細番号', '大会ID', '大会名', '開催日', '卓', '席', '品目', '個数', 'ドリチケ', '状態', '取消理由', '照会キー', 'リクエストID', '受付日時', '担当者', '担当端末', '担当日時', '完了日時', '操作履歴'],
   [SH.NOTIFY]: ['通知ID', '種別', '本文', '状態', '作成日時', '送信日時', '試行回数', 'エラー'], // 外部通知はロックの外で、ここを経由して送る
@@ -101,7 +101,7 @@ function setup() {
     (TIME_COLS[name] || []).forEach(function (c) { sh.getRange(2, c, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss'); });
   });
   closeColors_(book.getSheetByName(SH.CLOSE));
-  tournaments_().forEach(function (t) { tournSheet_(t.id, t.name); }); // 既存の大会にも集計シートを用意
+  tournaments_().forEach(function (t) { tournSheet_(t.id, t.name); }); // 既存のイベントにも集計シートを用意
   const p = PropertiesService.getScriptProperties();
   if (!p.getProperty('ADMIN_PIN')) p.setProperty('ADMIN_PIN', newPin_());
   showAdminPin();
@@ -305,7 +305,7 @@ function adminSave(pin, f) {
   return withLock_(function () {
     const name = str_(f.name);
     const sp = str_(f.staffPin);
-    if (!name) throw new Error('大会名を入力してください');
+    if (!name) throw new Error('イベント名を入力してください');
     if (!/^\d{4,8}$/.test(sp)) throw new Error('スタッフPINは数字4〜8桁で入力してください');
     const days = f.days || [];
     if (!days.length) throw new Error('開催日を1日以上登録してください');
@@ -334,16 +334,16 @@ function adminSave(pin, f) {
         stockRows.push([id, name, date, k + 1, n, s, str_(i.store), recv, exp, str_(i.method), str_(i.addr), str_(i.tel), str_(i.pay), str_(i.amt)]);
       });
     });
-    // 注文受付・受付時間・注文トークンは大会編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、大会一覧が消える
+    // 注文受付・受付時間・注文トークンはイベント編集では触らない。列数を HEAD に合わせないと replace_ が書き戻しに失敗し、イベント一覧が消える
     const prev = rows_(SH.TOURN).filter(function (r) { return str_(r[0]) === id; })[0] || [];
     replace_(SH.TOURN, function (r) { return str_(r[0]) === id; }, [[id, name, sp, f.active ? '有効' : '無効', new Date(), str_(prev[5]), str_(prev[6]), str_(prev[7])]]);
     replace_(SH.STOCK, function (r) { return str_(r[0]) === id; }, stockRows);
-    try { tournSheet_(id, name); } catch (e) { console.warn('大会シートを作成できませんでした: ' + e); } // 失敗しても保存は有効
+    try { tournSheet_(id, name); } catch (e) { console.warn('イベントシートを作成できませんでした: ' + e); } // 失敗しても保存は有効
     return adminList(pin);
   });
 }
 
-/** 大会の表示・非表示（スタッフのログイン画面に出すか）だけを切り替える */
+/** イベントの表示・非表示（スタッフのログイン画面に出すか）だけを切り替える */
 function adminSetActive(pin, id, active) {
   admin_(pin);
   return withLock_(function () {
@@ -354,21 +354,21 @@ function adminSetActive(pin, id, active) {
         return adminList(pin);
       }
     }
-    throw new Error('大会が見つかりません');
+    throw new Error('イベントが見つかりません');
   });
 }
 
 /* ---------- デジタルPOP（お客様向けの在庫表示） ---------- */
 
 /**
- * POP画面用。PIN不要（品目名・価格・在庫の有無だけを返す）。表示中の大会のみ。
+ * POP画面用。PIN不要（品目名・価格・在庫の有無だけを返す）。表示中のイベントのみ。
  * 営業日は5時切り替え（0〜4時台は前日の開催日として扱う）。date を渡すとその日を返す（確認用）。
  */
 function getPopState(tid, date) {
   const list = tournaments_().filter(function (t) { return t.active; });
   if (!tid) return { tournaments: list.map(function (t) { return { id: t.id, name: t.name }; }) };
   const t = list.filter(function (x) { return x.id === tid; })[0];
-  if (!t) throw new Error('大会が見つかりません（非表示の大会は表示できません）');
+  if (!t) throw new Error('イベントが見つかりません（非表示のイベントは表示できません）');
   const now = new Date();
   const d = date || Utilities.formatDate(new Date(now.getTime() - 5 * 3600000), TZ, 'yyyy-MM-dd');
   const st = state_(t, d);
@@ -388,7 +388,7 @@ function getPopImages(names) {
   return out;
 }
 
-/** 管理画面用：大会に含まれる品目名ごとの価格・写真 */
+/** 管理画面用：イベントに含まれる品目名ごとの価格・写真 */
 function adminPopList(pin, tid) {
   admin_(pin);
   const names = [];
@@ -426,7 +426,7 @@ function adminPopSave(pin, name, price, img) {
  * プレイヤーは PIN を持たないので placeOrder と getOrder は PIN 不要。そのぶん次で守る。
  *   ・卓ごとのトークン（QRのURLに入れる。作り直せば過去のQRが一斉に失効する）
  *   ・卓・席が「卓」シートに実在すること
- *   ・大会が有効かつ「注文受付」が受付中、受付時間内であること
+ *   ・イベントが有効かつ「注文受付」が受付中、受付時間内であること
  *   ・個数・種類・回数の制限
  *   ・品目が本当に販売中かをサーバーで判定し直すこと（端末から来た値は信じない）
  * 注文は在庫を減らさない。依頼として記録するだけで、在庫切れの記録とは分ける。
@@ -534,7 +534,7 @@ function rowToOrder_(r) {
     name: str_(r[7]), qty: Number(r[8]) || 0, ticket: str_(r[9]), state: str_(r[10]), reason: str_(r[11]),
     at: r[14] instanceof Date ? hm_(r[14]) : '', by: str_(r[15]), takenAt: r[17] instanceof Date ? hm_(r[17]) : '' };
 }
-/** リクエストIDは大会の中でだけ探す（他の大会の注文を引き当てて照会キーを渡さないため） */
+/** リクエストIDはイベントの中でだけ探す（他のイベントの注文を引き当てて照会キーを渡さないため） */
 function findOrderByReq_(tid, reqId) {
   const hit = orderRows_().filter(function (r) { return str_(r[2]) === tid && str_(r[13]) === reqId; });
   if (!hit.length) return null;
@@ -582,10 +582,10 @@ function newOrderId_() {
   throw new Error('注文を記録できませんでした。もう一度お願いします');
 }
 
-/** 大会の注文トークンを確かめる。QRは大会に1枚で、卓と席はプレイヤーが選ぶ */
+/** イベントの注文トークンを確かめる。QRはイベントに1枚で、卓と席はプレイヤーが選ぶ */
 function orderTourn_(tid, token) {
   const t = tournaments_().filter(function (x) { return x.id === str_(tid) && x.active; })[0];
-  if (!t) throw new Error('この大会は注文を受け付けていません');
+  if (!t) throw new Error('このイベントは注文を受け付けていません');
   if (!t.orderToken || t.orderToken !== str_(token)) throw new Error('このQRは使えません。スタッフにお知らせください');
   return t;
 }
@@ -706,14 +706,14 @@ function setOrder(tid, pin, id, no, state, staff, device, reason) {
 function adminTables(pin, tid) {
   admin_(pin);
   const t = tournaments_().filter(function (x) { return x.id === str_(tid); })[0];
-  if (!t) throw new Error('大会が見つかりません');
+  if (!t) throw new Error('イベントが見つかりません');
   // openNow は「いま実際に受け付けているか」。受付中でも受付時間外なら false。
   // 時間の書き方を間違えると全部の注文が静かに弾かれるので、管理画面で見えるようにする
   return { tables: tables_(str_(tid)), orderOpen: t.orderOpen, orderHours: t.orderHours, orderToken: t.orderToken,
     openNow: !!(t.orderOpen && inHours_(t.orderHours)), hoursOk: !str_(t.orderHours) || inHoursValid_(t.orderHours) };
 }
 
-/** 大会の注文トークンを発行・再発行する。作り直すと、刷ってあるQRが一斉に使えなくなる */
+/** イベントの注文トークンを発行・再発行する。作り直すと、刷ってあるQRが一斉に使えなくなる */
 function adminOrderToken(pin, tid) {
   admin_(pin);
   tid = str_(tid);
@@ -721,7 +721,7 @@ function adminOrderToken(pin, tid) {
     const sh = sheet_(SH.TOURN), all = rows_(SH.TOURN);
     let idx = -1;
     all.forEach(function (r, i) { if (str_(r[0]) === tid) idx = i; });
-    if (idx < 0) throw new Error('大会が見つかりません');
+    if (idx < 0) throw new Error('イベントが見つかりません');
     const row = all[idx].slice();
     row[7] = rnd_(16); row[4] = new Date();
     sh.getRange(idx + 2, 1, 1, HEAD[SH.TOURN].length).setValues([row]);
@@ -768,7 +768,7 @@ function parseTableSpec_(spec) {
 function adminPreviewTables(pin, spec) { admin_(pin); return parseTableSpec_(spec); }
 
 /**
- * 卓の一覧をまとめて設定する。spec に書いた卓がその大会の卓になる。
+ * 卓の一覧をまとめて設定する。spec に書いた卓がそのイベントの卓になる。
  * すでにある卓は席数をそのまま残す（個別に変えた席数が消えないように）。spec に無い卓は削除する。
  */
 function adminSetTables(pin, tid, spec, seats) {
@@ -820,7 +820,7 @@ function adminOrderOpen(pin, tid, open, hours) {
     const all = rows_(SH.TOURN);
     let idx = -1;
     all.forEach(function (r, i) { if (str_(r[0]) === tid) idx = i; });
-    if (idx < 0) throw new Error('大会が見つかりません');
+    if (idx < 0) throw new Error('イベントが見つかりません');
     const row = all[idx].slice();
     row[5] = open ? '受付中' : '停止';
     if (hours !== undefined && hours !== null) {
@@ -1032,19 +1032,19 @@ function popMaster_(withImg) {
   return m;
 }
 
-/* ---------- 大会ごとの集計シート ---------- */
+/* ---------- イベントごとの集計シート ---------- */
 
 const TOURN_LAYOUT = '集計v3'; // レイアウトを変えたら値を変える（既存シートを作り直す）
 
 /**
- * 大会ごとのシート「残数_大会名」を用意する（なければ作成、大会名が変わればシート名も変更）。
+ * イベントごとのシート「残数_イベント名」を用意する（なければ作成、イベント名が変わればシート名も変更）。
  * 中身は数式で「日次残数」「在庫設定」から引くため、期限切れ数が送信されるたびに自動で更新される。
- *   A〜G：その大会の日次残数の一覧（開催日 / 受取時間 / 品目（まとめ） / 品目 / 在庫数 / 期限切れ数 / 在庫切れ時刻）
+ *   A〜G：そのイベントの日次残数の一覧（開催日 / 受取時間 / 品目（まとめ） / 品目 / 在庫数 / 期限切れ数 / 在庫切れ時刻）
  *   I〜N：品目ごとの集計（受取時間などの末尾の（ ）を外した品目名でまとめる）
  *   P〜V：品目×受取時間ごとの集計
  *   集計の列：記録回数 / 期限切れ回数（期限切れ数が1以上の回数）/ 期限切れ数合計 / 平均期限切れ数（記録1回あたり）/ 期限切れ率（期限切れ数÷在庫数）
  *   期限切れ率が50%を超える行は薄い赤。
- * シートは E1 の大会IDで識別し、F1 のレイアウト番号が古ければ作り直す。
+ * シートは E1 のイベントIDで識別し、F1 のレイアウト番号が古ければ作り直す。
  */
 function tournSheet_(id, name) {
   const book = book_();
@@ -1065,7 +1065,7 @@ function buildTournSheet_(sh, id, name) {
   sh.clear();
   if (sh.setConditionalFormatRules) sh.setConditionalFormatRules([]);
   const c = "'" + SH.CLOSE + "'!", st = "'" + SH.STOCK + "'!";
-  sh.getRange('A1:F1').setValues([['大会', name, '', '大会ID', id, TOURN_LAYOUT]]);
+  sh.getRange('A1:F1').setValues([['イベント', name, '', '大会ID', id, TOURN_LAYOUT]]);
   sh.getRange('A1').setFontWeight('bold');
   sh.getRange('D1:F1').setFontColor('#9aa0a6');
   const stat = ['記録回数', '期限切れ回数', '期限切れ数合計', '平均期限切れ数', '期限切れ率'];
@@ -1076,7 +1076,7 @@ function buildTournSheet_(sh, id, name) {
   sh.getRange('P3:V3').setValues([['品目（まとめ）', '受取時間'].concat(stat)]);
   ['A3:G3', 'I3:N3', 'P3:V3'].forEach(function (a) { sh.getRange(a).setFontWeight('bold').setBackground('#f1f3f4'); });
   sh.getRange('I2:P2').setFontWeight('bold');
-  // 一覧：日次残数からこの大会の行を抽出し、受取時間は在庫設定から引く
+  // 一覧：日次残数からこのイベントの行を抽出し、受取時間は在庫設定から引く
   sh.getRange('A4').setFormula('=IFERROR(LET(' +
     'd, FILTER({' + c + 'C2:C, ' + c + 'D2:D, ' + c + 'E2:E, ' + c + 'F2:F, ' + c + 'H2:H}, ' + c + 'A2:A = $E$1), ' +
     'dt, INDEX(d, , 1), it, INDEX(d, , 2), ' +
@@ -1175,7 +1175,7 @@ function state_(t, date) {
 function tournaments_() {
   return rows_(SH.TOURN).filter(function (r) { return str_(r[0]); }).map(function (r) {
     // 注文受付は空欄なら「停止」とみなす（PIN不要の入口なので、明示したときだけ開ける）
-    // 注文トークンは大会に1つ。QRも大会に1枚で、卓と席はプレイヤーが選ぶ
+    // 注文トークンはイベントに1つ。QRもイベントに1枚で、卓と席はプレイヤーが選ぶ
     return { id: str_(r[0]), name: str_(r[1]), staffPin: str_(r[2]), active: str_(r[3]) !== '無効',
       orderOpen: str_(r[5]) === '受付中', orderHours: str_(r[6]), orderToken: str_(r[7]) };
   });
@@ -1196,7 +1196,7 @@ function config_(tid) {
 
 function staff_(tid, pin) {
   const t = tournaments_().filter(function (x) { return x.id === tid && x.active; })[0];
-  if (!t) throw new Error('大会が見つかりません');
+  if (!t) throw new Error('イベントが見つかりません');
   if (t.staffPin !== String(pin).trim()) throw new Error('PINが正しくありません');
   return t;
 }
