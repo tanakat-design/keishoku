@@ -12,6 +12,7 @@
   - `manual-staff.html`：**アルバイト用**。イベント中に触る操作だけ。やること3つ → ログイン → 画面 → 1日の流れ → 受取／在庫切れ／期限切れ／注文 → 守ること → よくある質問。
   - `manual-admin.html`：**管理者用**。**イベントの最中から**始める（準備の手順は書かない。SETUP-ORDER.md にある）。全体像 → 最中 → 終わったあと → 落とし穴 → 困ったら。
   - 図はSVGで、**縦に積む**こと。横長の図はスマホ幅で字が潰れる。配色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ）。
+  - `assets/manual/*.jpg` は**実際の画面の写し**（login / record / recv / expiry / order）。本番のデータではなく、**ローカルで `window.fetch` を差し替えて作ったテスト用のデータ**を流して 390px 幅で撮った。公開ページなので実在の店舗名・金額・PINは写さない。画面を変えたら撮り直す。手順は `.claude/launch.json` の `keishoku` を起動し、`index.html` を開いて `S.session` / `S.day` を直接作ってから `render()` する。
   - Artifact（claude.ai/artifact/MvDkC7HgsYE4c8Y2ihi5Nt）も同じ内容に保つ。**2枚を1つのArtifactにまとめてある**（`manual-staff.html` がページ本体、`manual-admin.html` は `files` で同梱。ページ本体の複製も `files` に入れて相対リンクを通している）。別々に publish するとページ間のリンクが切れる。
 - `test.html`：POPの表示テスト（SPADIE / JOPT / 標準のリンク集。見本データで開く）
 - `gas/test-order.js`：GASのグローバルをスタブして注文ロジックを Node で検証する（`node gas/test-order.js gas/Code.gs`）

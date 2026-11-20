@@ -109,6 +109,8 @@ tr:last-child td{border-bottom:0}
 figure{margin:0 0 18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 16px 12px}
 figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--fg)}
 figcaption{color:var(--muted);font-size:14.5px;margin-top:10px;text-align:center}
+/* 実際の画面の写し。スマホ幅で撮ったものをそのまま出すので、大きくしすぎない */
+figure.shot img{display:block;margin:0 auto;width:100%;max-width:330px;height:auto;border:1px solid var(--line);border-radius:12px}
 
 /* 画面の見本 */
 .demo{font-family:var(--display);font-weight:700;border-radius:8px;padding:11px 14px;margin:0 0 8px;font-size:15.5px}
@@ -201,6 +203,11 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <p>一度入れば、同じ端末では次から自動で入る。人が交代するときは右上の<strong>「切替」</strong>で名前を入れ直す。</p>
 
+<figure class="shot">
+  <img src="assets/manual/login.jpg" alt="ログイン画面。イベントを選ぶ欄、スタッフPINの欄、名前の欄、開始ボタンが並んでいる" loading="lazy">
+  <figcaption>この3つを入れて「開始」。PINの右の「表示」で中身が見える。</figcaption>
+</figure>
+
 <div class="note warn"><b>PINは2種類ある。</b>あなたが使うのは<strong>スタッフPIN</strong>。<strong>管理者PIN</strong>は社員が使うもので、入れても通らない。</div>
 
 <h3>画面は3つあるが、あなたが使うのは1つ</h3>
@@ -266,24 +273,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <h2 id="recv"><span class="no">5</span>受け取ったとき</h2>
 
-<figure>
-  <svg viewBox="0 0 520 230" role="img" aria-label="受取タブのカード。時間と店名、支払いの黄色い枠、緑の受取済みボタンが並ぶ">
-    <rect x="12" y="12" width="496" height="206" rx="12" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="34" y="52" font-size="24" font-weight="700" fill="currentColor">17:00</text>
-    <text x="118" y="52" font-size="18" font-weight="700" fill="currentColor">テスト弁当店</text>
-    <rect x="34" y="64" width="74" height="22" rx="11" fill="#e8f0fd"/>
-    <text x="71" y="80" font-size="12.5" font-weight="700" text-anchor="middle" fill="#174ea6">店舗受取</text>
-
-    <rect x="34" y="96" width="452" height="54" rx="8" fill="#fff8e1" stroke="#f0d890" stroke-width="1.5"/>
-    <text x="48" y="117" font-size="12.5" fill="#6b6862">支払方法</text>
-    <text x="126" y="118" font-size="15" font-weight="700" fill="#1c1b19">13日カード払い</text>
-    <text x="48" y="140" font-size="12.5" fill="#6b6862">支払金額</text>
-    <text x="126" y="142" font-size="19" font-weight="700" fill="#1c1b19">38,000円</text>
-
-    <rect x="34" y="164" width="452" height="38" rx="9" fill="#1e8e3e"/>
-    <text x="260" y="189" font-size="16" font-weight="700" text-anchor="middle" fill="#fff">受取済みにする</text>
-  </svg>
-  <figcaption>黄色い枠が支払い。現地で払うものだけ、その場で払う。</figcaption>
+<figure class="shot">
+  <img src="assets/manual/recv.jpg" alt="受取タブの画面。上のカードは受取済みで緑になっており、下のカードには支払方法と支払金額の黄色い枠が出ている" loading="lazy">
+  <figcaption>上は受け取り済み（緑）。下はまだ。黄色い枠が支払い。</figcaption>
 </figure>
 
 <ol class="steps">
@@ -295,6 +287,11 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 <div class="note warn"><b>「支払い無し」と出たら、払わずに社員を呼ぶ。</b>「払わなくていい」ではなく「何も書かれていない」という意味。現地で請求されたら、その場で払わない。</div>
 
 <h2 id="out"><span class="no">6</span>売り切れたとき</h2>
+
+<figure class="shot">
+  <img src="assets/manual/record.jpg" alt="在庫切れ記録タブ。受取時間ごとに品目が並び、選んだ品目だけ赤枠で選択中と出ている。下に時刻と備考の欄と、在庫切れを記録するボタンがある" loading="lazy">
+  <figcaption>品目をタップすると赤くなる。下のボタンに選んだ件数が出る。</figcaption>
+</figure>
 
 <ol class="steps">
   <li><b>在庫切れ記録タブを開く。</b></li>
@@ -308,29 +305,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <h2 id="exp"><span class="no">7</span>賞味期限が来たとき</h2>
 
-<figure>
-  <svg viewBox="0 0 520 206" role="img" aria-label="30分前に黄色い帯が出て、期限を過ぎると赤い帯に変わり、赤い帯のなかに個数の欄と登録ボタンが出る図">
-    <defs>
-      <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
-      </marker>
-    </defs>
-    <rect x="12" y="12" width="496" height="42" rx="8" fill="#f9ab00"/>
-    <text x="32" y="39" font-size="16" font-weight="700" fill="#202124">あと12分で カレーパン が期限切れです</text>
-
-    <line x1="260" y1="62" x2="260" y2="84" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
-    <text x="276" y="79" font-size="13" fill="currentColor">時間が過ぎると</text>
-
-    <rect x="12" y="92" width="496" height="100" rx="8" fill="#b3261e"/>
-    <text x="32" y="120" font-size="16" font-weight="700" fill="#fff">カレーパン が期限切れになりました。</text>
-    <text x="32" y="150" font-size="13" fill="#fff">カレーパン</text>
-    <rect x="110" y="134" width="70" height="30" rx="6" fill="#fff"/>
-    <text x="145" y="155" font-size="15" font-weight="700" text-anchor="middle" fill="#202124">6</text>
-    <rect x="196" y="134" width="88" height="30" rx="6" fill="#fff"/>
-    <text x="240" y="155" font-size="14.5" font-weight="700" text-anchor="middle" fill="#b3261e">登録</text>
-    <text x="32" y="181" font-size="12.5" fill="#fff">捨てる数を入れて押すと、この帯が消える</text>
-  </svg>
-  <figcaption>赤い帯のなかで数を入れて登録できる。タブを移動しなくていい。</figcaption>
+<figure class="shot">
+  <img src="assets/manual/expiry.jpg" alt="画面の上に赤い帯が出て、そのなかに品目ごとの個数の欄と登録ボタンが並び、その下に黄色い予告の帯が続いている" loading="lazy">
+  <figcaption>赤い帯のなかに欄がある。ここに入れて「登録」。下の黄色は次の予告。</figcaption>
 </figure>
 
 <ol class="steps">
@@ -372,6 +349,11 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
     <text x="200" y="292" font-size="12.5" text-anchor="middle" fill="currentColor">ドリチケはこのとき受け取る</text>
   </svg>
   <figcaption>品切れで渡せないときは「取消」。理由を選ぶと、お客の画面に出る。</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/manual/order.jpg" alt="注文タブ。上に担当する卓のボタンが並び、その下に注文カードが2件。1件は受付で届けに行くボタンがあり、もう1件は配達中で担当者名が出ている" loading="lazy">
+  <figcaption>赤い線が未対応。青い線は誰かが届けに行っている。</figcaption>
 </figure>
 
 <p><strong>自分の担当する卓だけ出すこともできる。</strong>注文タブの上に「100番台」「200番台」のボタンが出たら、自分の階を押しておく。押した階の注文だけが出て、その階だけ鳴る。</p>
