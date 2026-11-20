@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="軽食アプリの管理者がイベントの前・最中・後にやること。">
+<meta name="description" content="軽食アプリの管理者が、イベントの最中と終わったあとにやること。">
 <style>
 /* GitHub Pages で単体で開くときの土台。Artifact 側の既定と同じにしてある */
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -15,8 +15,8 @@ img{max-width:100%}
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
 <style>
-/* 準備するときに机で読む前提。順番どおりに並べ、各手順にどの画面のどのボタンかを書く。
-   色は画面と同じ意味に揃える（黄＝注意・赤＝壊れる・緑＝済んだ） */
+/* 現場で判断するときに引く前提。やりたいことから引けるように表を使い、
+   理由は畳んでおく。色は画面と同じ意味に揃える（黄＝注意・赤＝壊れる・緑＝済んだ） */
 :root{
   --bg:#f7f6f3; --surface:#ffffff; --fg:#1c1b19; --muted:#6b6862; --line:#e2dfd8;
   --accent:#1558c0; --accent-weak:#e8f0fd;
@@ -85,11 +85,12 @@ figure{margin:0 0 18px;background:var(--surface);border:1px solid var(--line);bo
 figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--fg)}
 figcaption{color:var(--muted);font-size:14.5px;margin-top:10px;text-align:center}
 
+.faqgroup{font-family:var(--display);font-weight:700;font-size:14.5px;color:var(--muted);letter-spacing:.06em;margin:26px 0 10px}
 details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden}
 details[open]{border-color:var(--accent)}
-summary{cursor:pointer;padding:15px 18px;font-family:var(--display);font-weight:700;font-size:16px;list-style:none;line-height:1.6}
+summary{cursor:pointer;padding:15px 44px 15px 18px;font-family:var(--display);font-weight:700;font-size:16px;list-style:none;line-height:1.6;position:relative}
 summary::-webkit-details-marker{display:none}
-summary::after{content:"＋";float:right;color:var(--accent)}
+summary::after{content:"＋";position:absolute;right:18px;top:15px;color:var(--accent)}
 details[open] summary::after{content:"－"}
 details>div{padding:0 18px 16px;border-top:1px solid var(--line);padding-top:14px;font-size:15.5px}
 details p:last-child,details ul:last-child{margin-bottom:0}
@@ -104,8 +105,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 <nav>
   <ol>
     <li><a href="#map">全体像</a></li>
-    <li><a href="#before">イベントの前</a></li>
-    <li><a href="#during">最中</a></li>
+    <li><a href="#during">イベントの最中</a></li>
     <li><a href="#after">終わったあと</a></li>
     <li><a href="#traps">落とし穴</a></li>
     <li><a href="#faq">困ったら</a></li>
@@ -114,7 +114,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <header>
   <h1>管理者用<br>かんたん手引き</h1>
-  <p class="lede">イベントの前・最中・後にやることを、順番に並べた。アルバイトが現場で触る操作は <a href="manual-staff.html">アルバイト用</a> にある。</p>
+  <p class="lede">イベントの最中と、終わったあとにやること。アルバイトが現場で触る操作は <a href="manual-staff.html">アルバイト用</a> にある。</p>
 </header>
 
 <h2 id="map"><span class="no">1</span>何がどこにあるか</h2>
@@ -166,83 +166,56 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <figcaption>見る画面が3つと、あなたが使う管理画面。どれも同じサーバーを通して、1つのスプレッドシートを読み書きする。</figcaption>
 </figure>
 
-<p>あなたが触るのは<strong>管理画面</strong>だけでいい。スタッフ画面の「管理者メニュー」から入る。スプレッドシートを直接いじる必要は、ふだんは無い。</p>
+<p>あなたが触るのは<strong>管理画面</strong>だけでいい。スタッフ画面の「管理者メニュー」から入る。</p>
 
-<div class="note warn"><b>PINは2種類ある。</b><strong>スタッフPIN</strong>はイベントごとに違い、アルバイトが使う。<strong>管理者PIN</strong>は全体で1つで、あなたが使う。逆に入れても通らない。</div>
+<div class="note warn"><b>PINは2種類ある。</b><strong>スタッフPIN</strong>はイベントごとに違い、アルバイトが使う。<strong>管理者PIN</strong>は全体で1つで、あなたが使う。逆に入れても通らない。スタッフPINは管理画面のイベント一覧に出ている。</div>
 
-<h2 id="before"><span class="no">2</span>イベントの前にやること</h2>
+<h2 id="during"><span class="no">2</span>イベントの最中</h2>
+
+<div class="tw">
+<table>
+  <tr><th>やりたいこと</th><th>どうする</th></tr>
+  <tr><td><strong>注文を今すぐ止める</strong></td><td>イベント一覧 → 注文設定 → <strong>受付を停止する</strong>。すぐ止まる。再開も同じ場所。QRは刷り直さなくていい</td></tr>
+  <tr><td>在庫数が実際と違った</td><td>イベントを編集して直す。<strong>品目名は変えない</strong>（下の落とし穴を見る）</td></tr>
+  <tr><td>品目を足す</td><td>イベントを編集 → 受取ブロックの「＋ 品目を追加」。写真とドリチケはPOP設定で別に入れる</td></tr>
+  <tr><td>賞味期限が入っていない品目がある</td><td>イベントを編集して受取ブロックの賞味期限を入れる。入っていないと、スタッフの画面に帯が出ない</td></tr>
+  <tr><td>卓を足す・減らす</td><td>注文設定 → テーブルの設定。<strong>書いた卓がそのままその イベントの卓になり、書かなかった卓は消える</strong></td></tr>
+  <tr><td>QRが悪用された</td><td>注文設定 → <strong>QRを作り直す</strong>。刷ってある古いQRが一斉に使えなくなる（刷り直しが要る）</td></tr>
+  <tr><td>スタッフがログインできない</td><td>イベントが「非表示」になっていないか見る。一覧のスイッチで「表示」にする</td></tr>
+  <tr><td>POPをモニターに出す</td><td>イベント一覧 → POP設定にURLが出る。<strong>現在販売中のみ／全品目</strong>と<strong>横／縦</strong>を選べる。モニターのブラウザで開いて全画面にする</td></tr>
+</table>
+</div>
+
+<div class="note warn"><b>未完了の注文が50件を超えると、受付が自動で止まる。</b>さばききれていない合図。人を増やすか、落ち着くまで止めておく。</div>
+
+<div class="note ok"><b>通知は画面を開いている間しか鳴らない。</b>外部通知（Discord・LINE・メール）は入れていない。<strong>注文担当の端末を1台決めて開きっぱなしにする</strong>運用が前提。フロアが分かれているなら、各端末で注文タブの「担当する卓」を押させる。10分を過ぎた注文は担当外でも鳴る。</div>
+
+<h2 id="after"><span class="no">3</span>終わったあと</h2>
 
 <figure>
-  <svg viewBox="0 0 420 352" role="img" aria-label="イベント作成、写真とドリチケ、卓の登録、受付開始、QR印刷の順に上から下へ進む流れ。下の3つは卓上注文を使うときだけ">
+  <svg viewBox="0 0 420 288" role="img" aria-label="受付を停止、イベントを非表示、注文シートを退避、集計を見る、の順に上から下へ進む片付けの流れ">
     <defs>
       <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
         <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
       </marker>
     </defs>
     <rect x="6" y="6" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="36" font-size="15" font-weight="700" fill="currentColor">1　イベントを作る</text>
+    <text x="30" y="36" font-size="15" font-weight="700" fill="currentColor">1　受付を停止する</text>
     <line x1="210" y1="58" x2="210" y2="72" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
 
     <rect x="6" y="76" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="106" font-size="15" font-weight="700" fill="currentColor">2　写真とドリチケ枚数を入れる</text>
+    <text x="30" y="106" font-size="15" font-weight="700" fill="currentColor">2　イベントを「非表示」にする</text>
     <line x1="210" y1="128" x2="210" y2="142" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
 
-    <rect x="6" y="146" width="408" height="190" rx="9" fill="none" stroke="#1558c0" stroke-width="2" stroke-dasharray="6 5"/>
-    <text x="30" y="172" font-size="12.5" font-weight="700" fill="#1558c0">ここから下は、卓上注文を使うときだけ</text>
+    <rect x="6" y="146" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="30" y="176" font-size="15" font-weight="700" fill="currentColor">3　「注文」シートの行を退避する</text>
+    <line x1="210" y1="198" x2="210" y2="212" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
 
-    <rect x="20" y="184" width="380" height="42" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="42" y="211" font-size="15" font-weight="700" fill="currentColor">3　卓を登録する</text>
-    <line x1="210" y1="230" x2="210" y2="242" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
-
-    <rect x="20" y="246" width="380" height="42" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="42" y="273" font-size="15" font-weight="700" fill="currentColor">4　受付を開始する</text>
-    <line x1="210" y1="292" x2="210" y2="304" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
-
-    <rect x="20" y="308" width="380" height="42" rx="8" fill="#e8f0fd" stroke="#1558c0" stroke-width="2"/>
-    <text x="42" y="335" font-size="15" font-weight="700" fill="#174ea6">5　QRを刷って卓に置く</text>
+    <rect x="6" y="216" width="408" height="48" rx="9" fill="#e8f0fd" stroke="#1558c0" stroke-width="2"/>
+    <text x="30" y="246" font-size="15" font-weight="700" fill="#174ea6">4　集計を見て、次の発注を決める</text>
   </svg>
-  <figcaption>下の3つは、卓上注文を使うときだけ。使わないなら2つ目で終わり。</figcaption>
+  <figcaption>2を忘れると、次のイベントでスタッフが選び間違える。</figcaption>
 </figure>
-
-<ol class="steps">
-  <li><b>イベントを作る。</b><span class="where">管理画面 → ＋ 新しいイベントを作成</span>
-    <p style="margin:8px 0 0">イベント名・スタッフPIN（数字4〜8桁）・開催日・受取ブロック（店舗／受取時間／賞味期限／受取方法／住所／電話／支払い）と品目・在庫数を入れる。</p>
-    <p style="margin:6px 0 0">運営シート「軽食」タブがあるなら、<strong>CSVで一括取り込み</strong>できる。同じ画面の「CSVファイルを選んで取り込む」。</p>
-  </li>
-  <li><b>写真とドリチケ枚数を入れる。</b><span class="where">イベント一覧 → POP設定</span>
-    <p style="margin:8px 0 0">品目ごとに「ドリチケ〔　〕枚」と写真。<strong>「写真をまとめて選ぶ」</strong>で複数枚を一度に入れられる（ファイル名で品目に自動で割り当てる）。写真は自動で4:3に切って縮める。</p>
-  </li>
-  <li><b>卓を登録する。</b><span class="where">イベント一覧 → 注文設定 → テーブルの設定</span>
-    <p style="margin:8px 0 0">使う卓番号をそのまま書く。<code>100-114, 121-132, 201-225</code> のように範囲とカンマで書ける。<code>001-012</code> ならゼロ付きのまま。席数を入れて「この内容にする」。「確認」を押すと保存前に何卓できるか出る。</p>
-  </li>
-  <li><b>受付を開始する。</b><span class="where">同じ画面 → 受付を開始する</span>
-    <p style="margin:8px 0 0">ここで注文用QRが出る。<strong>受付時間は空のままでいい</strong>（制限なし）。止めたいときはボタンで止めるほうが確実。</p>
-  </li>
-  <li><b>QRを刷って卓に置く。</b>
-    <p style="margin:8px 0 0"><strong>QRはイベントに1枚。</strong>全部の卓に同じものを置く。卓と席はプレイヤーが自分で選ぶ。刷り分けは要らない。</p>
-  </li>
-</ol>
-
-<div class="note danger"><b>卓はイベントごとに入れ直す。</b>書いた卓がそのままそのイベントの卓になり、<strong>書かなかった卓は消える</strong>。前回のレイアウトが残っていると、存在しない卓に注文が入る。</div>
-
-<h3>POPをモニターに出す</h3>
-<p>POP設定の画面にURLが出る。<strong>現在販売中のみ</strong>と<strong>全品目</strong>、<strong>横・縦</strong>を選べる。モニターのブラウザでそのURLを開いて全画面にするだけ。30秒ごとに勝手に更新される。</p>
-
-<h2 id="during"><span class="no">3</span>イベントの最中</h2>
-
-<div class="tw">
-<table>
-  <tr><th>やりたいこと</th><th>どこ</th></tr>
-  <tr><td>注文を今すぐ止める</td><td>注文設定 → <strong>受付を停止する</strong>。すぐ止まる。再開も同じ場所。QRは刷り直さなくていい</td></tr>
-  <tr><td>在庫数が実際と違った</td><td>イベントを編集して直す。品目名は変えない（あとで説明）</td></tr>
-  <tr><td>品目を追加したい</td><td>イベントを編集 → 受取ブロックに「＋ 品目を追加」。写真とドリチケはPOP設定で別に入れる</td></tr>
-  <tr><td>QRが悪用された</td><td>注文設定 → <strong>QRを作り直す</strong>。刷ってある古いQRが一斉に使えなくなる（刷り直しが要る）</td></tr>
-</table>
-</div>
-
-<div class="note warn"><b>未完了の注文が50件を超えると、受付が自動で止まる。</b>さばききれていない合図なので、人を増やすか、落ち着くまで止めておく。</div>
-
-<h2 id="after"><span class="no">4</span>終わったあと</h2>
 
 <ol class="steps">
   <li><b>受付を停止する。</b><span class="where">注文設定</span></li>
@@ -253,18 +226,18 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
     <p style="margin:8px 0 0">行が増えると取得が遅くなる。イベント1回ぶんずつ退避する。</p>
   </li>
   <li><b>集計を見る。</b>
-    <p style="margin:8px 0 0">スプレッドシートに<strong>「残数_イベント名」</strong>のシートが自動でできている。品目ごとの <strong>期限切れ率</strong> が出る。50%を超えた行は薄い赤になる。<strong>これが次の発注数の根拠</strong>。</p>
+    <p style="margin:8px 0 0">スプレッドシートに<strong>「残数_イベント名」</strong>のシートが自動でできている。品目ごとの <strong>期限切れ率</strong> が出て、50%を超えた行は薄い赤になる。<strong>これが次の発注数の根拠</strong>。</p>
   </li>
 </ol>
 
 <div class="note ok"><b>記録が抜けると、この集計が使えなくなる。</b>だからアルバイトには「品切れはその場で押す」を徹底してもらう。前回のイベントでは、品切れが10品目あって記録は0件だった。</div>
 
-<h2 id="traps"><span class="no">5</span>知らないとハマること</h2>
+<h2 id="traps"><span class="no">4</span>知らないとハマること</h2>
 
 <details>
   <summary>イベントの途中でCSVを入れ直してはいけない</summary>
   <div><p>CSVの取り込みは品目名を作り直す。記録は<strong>品目名で紐付いている</strong>ので、途中で入れ直すと、それまでの在庫切れログや期限切れ数が新しい品目と繋がらなくなる。</p>
-  <p>支払方法と支払金額だけを入れたいときは、同じ画面の下にある<strong>「CSVから支払いだけ取り込む」</strong>を使う。品目・在庫数・受取時間・賞味期限は触らない。</p></div>
+  <p>支払方法と支払金額だけを入れたいときは、取り込み欄の下にある<strong>「CSVから支払いだけ取り込む」</strong>を使う。品目・在庫数・受取時間・賞味期限は触らない。</p></div>
 </details>
 
 <details>
@@ -280,7 +253,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <details>
   <summary>注文は在庫を減らさない</summary>
-  <div><p>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおりスタッフが押す。<strong>注文は受付であって、渡せる保証ではない。</strong>品切れならスタッフが取り消す。</p></div>
+  <div><p>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおりスタッフが押す。<strong>注文は受付であって、渡せる保証ではない。</strong>品切れならスタッフが取り消す。</p>
+  <p>注文の制限：1回あたり合計5個・5種類、同じ席は60秒に1件、同じ卓は10分に5件。</p></div>
 </details>
 
 <details>
@@ -290,12 +264,26 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 </details>
 
 <details>
-  <summary>通知は画面を開いている間しか鳴らない</summary>
-  <div><p>外部通知（Discord・LINE・メール）は入れていない。アプリの中の音と帯だけで知らせる。<strong>注文担当の端末を1台決めて、開きっぱなしにする運用</strong>が前提になっている。</p>
-  <p>フロアが分かれているなら、各端末で注文タブの「担当する卓」を押しておくと、その階の注文だけが出て、その階だけ鳴る。10分を過ぎた注文は担当外でも鳴る。</p></div>
+  <summary>QRはイベントに1枚</summary>
+  <div><p>卓ごとに刷り分けない。全部の卓に同じものを置き、プレイヤーが読み取ってから卓番号と席番号を自分で選ぶ。</p>
+  <p>登録していない卓番号は選べないので、存在しない卓への誤配達は起きない。<strong>だから卓の登録はイベントごとに入れ直す。</strong></p></div>
 </details>
 
-<h2 id="faq"><span class="no">6</span>困ったら</h2>
+<details>
+  <summary>押したデータはどこに入るのか</summary>
+  <div><p>スプレッドシート「JOPT 軽食在庫管理」。押した瞬間に入る。</p>
+  <ul>
+    <li><strong>在庫切れログ</strong>＝いつ何が切れたか</li>
+    <li><strong>日次残数</strong>＝在庫数・期限切れ数・消費数</li>
+    <li><strong>受取記録</strong>＝誰が何時に受け取ったか</li>
+    <li><strong>注文</strong>＝卓上注文の明細</li>
+  </ul>
+  <p>イベントごとの集計シートは、この日次残数から自動で作られる。</p></div>
+</details>
+
+<h2 id="faq"><span class="no">5</span>困ったら</h2>
+
+<div class="faqgroup">設定</div>
 
 <details>
   <summary>アルバイトが「イベントが出てこない」と言う</summary>
@@ -303,8 +291,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 </details>
 
 <details>
-  <summary>POPに写真が出ない</summary>
-  <div><p>その品目の写真が登録されていない。POP設定から入れる。ドリチケ枚数も同じ画面。</p></div>
+  <summary>POPに写真が出ない／ドリチケ枚数が出ない</summary>
+  <div><p>その品目に登録されていない。イベント一覧 → POP設定から入れる。<strong>「写真をまとめて選ぶ」</strong>で複数枚を一度に入れられる（ファイル名で品目に自動で割り当てる）。</p>
+  <p>写真は自動で4:3に切って縮めるので、大きい写真をそのまま選んでいい。</p></div>
 </details>
 
 <details>
@@ -318,15 +307,30 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <div><p>リポジトリに点検スクリプトがある。<code>node gas/check-live.js &lt;イベントID&gt;</code> を流すと、日付の取り違え・受取時間や店舗の空欄・賞味期限が受取時刻より前・写真やドリチケの未設定を拾う。PINは要らず、読むだけなので本番は変わらない。</p></div>
 </details>
 
+<div class="faqgroup">画面</div>
+
+<details>
+  <summary>POPが固まった／更新されない</summary>
+  <div><p>30秒ごとに自動で取り直している。止まって見えるときは<strong>ページを再読み込み</strong>する。前回の表示が残っている間は「前回の表示のまま」と帯が出る。</p>
+  <p>長時間つけっぱなしでも重くならないように作ってあるが、丸一日つけたら一度リロードしておくと確実。</p></div>
+</details>
+
+<details>
+  <summary>スタッフから「鈴が鳴らない」と言われた</summary>
+  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。ブラウザは最初のタップがあるまで音を出せない。どこか1回タップさせる。</p>
+  <p>画面を閉じていると鳴らない。注文担当の端末は開きっぱなしにする。</p></div>
+</details>
+
 <details>
   <summary>アプリを直したのに反映されない</summary>
   <div><p>画面（<code>index.html</code>・<code>pop.html</code>・<code>order.html</code>）はGitHubにコミットすれば1〜2分で反映される。</p>
-  <p><strong>サーバー（<code>gas/Code.gs</code>）はコミットだけでは反映されない。</strong>Apps Script エディタに貼って保存し、<strong>「デプロイ → デプロイを管理 → 編集 → バージョン：新バージョン → デプロイ」</strong>まで必要。「新しいデプロイ」は使わない（URLが変わって画面と食い違う）。</p></div>
+  <p><strong>サーバー（<code>gas/Code.gs</code>）はコミットだけでは反映されない。</strong>Apps Script エディタに貼って保存し、<strong>「デプロイ → デプロイを管理 → 編集 → バージョン：新バージョン → デプロイ」</strong>まで必要。「新しいデプロイ」は使わない（URLが変わって画面と食い違う）。</p>
+  <p>シートの列を足したときは、デプロイのあとに <code>setup()</code> を1回実行する。</p></div>
 </details>
 
 <footer>
-  <p style="margin-bottom:4px">アルバイトに渡すのは <a href="manual-staff.html">アルバイト用 かんたん手引き</a>。細かい質問は <a href="manual.html">現場マニュアル（詳しい版）</a>。</p>
-  <p style="margin:0">アプリの中身の仕様は、リポジトリの AGENTS.md・ORDER.md・SETUP-ORDER.md にある。</p>
+  <p style="margin-bottom:4px">アルバイトに渡すのは <a href="manual-staff.html">アルバイト用 かんたん手引き</a>。</p>
+  <p style="margin:0">イベントの作りかた（イベント作成・CSV取り込み・写真・卓とQR）と、アプリの中身の仕様は、リポジトリの SETUP-ORDER.md・AGENTS.md にある。</p>
 </footer>
 
 </div>

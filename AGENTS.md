@@ -8,8 +8,11 @@
 - `gas/Code.gs`：サーバー（Google Apps Script）のソース。GASエディタの `コード.gs` と同じ内容に保つ
 - `gas/appsscript.json`：GASのマニフェスト
 - `order.html`：卓上注文（プレイヤー用。卓のQRから開く。PIN不要）
-- `manual-staff.html`：**アルバイト用のかんたん手引き**（イベント中に触る操作だけ。SVGの図つき）／`manual-admin.html`：**管理者用のかんたん手引き**（イベントの前・最中・後にやること。SVGの図つき）。どちらも `manual.html` と同じ配色・同じ土台で、互いにリンクしている。図は**縦に積む**こと。横長の図はスマホ幅で字が潰れる
-- `manual.html`：現場向けの手引き（スタッフ・ロジ用。PIN不要・閲覧のみ）。3つの画面の違い・1日の流れ・タブごとの使い方・守ること・よくある質問30件。GitHub Pagesで公開するので、**PINや店舗の連絡先・支払金額など、外に出せない内容は書かない**。中身を変えたら同じ内容の Artifact（claude.ai/artifact/MvDkC7HgsYE4c8Y2ihi5Nt）も更新する。**3枚は1つのArtifactにまとめてある**（`manual.html` がページ本体、残り2枚は `files` で同梱）。別々に publish するとページ間の相対リンクが切れる
+- 手引きは**2枚だけ**。読む人で分けてある。どちらも GitHub Pages で公開するので、**PINや店舗の連絡先・支払金額など、外に出せない内容は書かない**。
+  - `manual-staff.html`：**アルバイト用**。イベント中に触る操作だけ。やること3つ → ログイン → 画面 → 1日の流れ → 受取／在庫切れ／期限切れ／注文 → 守ること → よくある質問。
+  - `manual-admin.html`：**管理者用**。**イベントの最中から**始める（準備の手順は書かない。SETUP-ORDER.md にある）。全体像 → 最中 → 終わったあと → 落とし穴 → 困ったら。
+  - 図はSVGで、**縦に積む**こと。横長の図はスマホ幅で字が潰れる。配色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ）。
+  - Artifact（claude.ai/artifact/MvDkC7HgsYE4c8Y2ihi5Nt）も同じ内容に保つ。**2枚を1つのArtifactにまとめてある**（`manual-staff.html` がページ本体、`manual-admin.html` は `files` で同梱。ページ本体の複製も `files` に入れて相対リンクを通している）。別々に publish するとページ間のリンクが切れる。
 - `test.html`：POPの表示テスト（SPADIE / JOPT / 標準のリンク集。見本データで開く）
 - `gas/test-order.js`：GASのグローバルをスタブして注文ロジックを Node で検証する（`node gas/test-order.js gas/Code.gs`）
 - `gas/check-live.js`：本番に入っているイベントの設定を外から点検する（`node gas/check-live.js <イベントID>`。引数なしでイベント一覧）。PIN不要・読み取りだけなので何度流しても本番は変わらない

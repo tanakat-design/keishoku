@@ -45,14 +45,20 @@ img{max-width:100%}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.8;margin:0;font-size:17px;-webkit-text-size-adjust:100%}
 .wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 72px}
-header{padding-block:36px 10px}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
+nav ol{display:flex;flex-wrap:wrap;gap:6px 14px;list-style:none;margin:0;padding:0;font-size:13.5px}
+nav a{color:var(--muted);text-decoration:none;font-weight:500;white-space:nowrap}
+nav a:hover,nav a:focus-visible{color:var(--accent)}
+header{padding-block:32px 10px}
 h1{font-family:var(--display);font-weight:900;font-size:clamp(28px,7vw,40px);line-height:1.25;margin:0 0 10px;text-wrap:balance}
 .lede{color:var(--muted);font-size:17px;margin:0}
-h2{font-family:var(--display);font-weight:800;font-size:clamp(21px,5vw,27px);line-height:1.35;margin:48px 0 10px;text-wrap:balance;scroll-margin-top:16px}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(21px,5vw,27px);line-height:1.35;margin:48px 0 10px;text-wrap:balance;scroll-margin-top:62px}
 h2 .no{display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--accent);color:#fff;font-size:.7em;margin-right:.5em;vertical-align:.1em}
+h3{font-family:var(--display);font-weight:700;font-size:18px;margin:26px 0 8px}
 p{margin:0 0 14px}
 a{color:var(--accent)}
 strong{font-weight:700}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;background:var(--accent-weak);padding:1px 6px;border-radius:4px}
 
 /* 3つだけ */
 .three{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:0 0 8px;padding:0;list-style:none}
@@ -66,6 +72,28 @@ strong{font-weight:700}
 .steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px 16px 58px;position:relative;min-width:0}
 .steps li::before{content:counter(s);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--display);font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center}
 .steps b{font-family:var(--display);font-size:18px}
+
+/* 1日の流れ */
+.flow{list-style:none;margin:0 0 16px;padding:0;border-left:2px solid var(--line);margin-left:8px}
+.flow li{position:relative;padding:0 0 22px 22px;min-width:0}
+.flow li::before{content:"";position:absolute;left:-7px;top:10px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.flow .when{font-family:var(--display);font-weight:700;font-size:16px;display:block}
+.flow .what{color:var(--muted);font-size:15.5px}
+.flow li:last-child{padding-bottom:0}
+
+/* 守ること */
+.rules{counter-reset:r;list-style:none;margin:0 0 16px;padding:0;display:grid;gap:12px}
+.rules li{counter-increment:r;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.rules .head{font-family:var(--display);font-weight:800;font-size:17.5px;display:block;margin-bottom:4px}
+.rules .head::before{content:counter(r);display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;background:var(--fg);color:var(--bg);font-size:12px;border-radius:50%;margin-right:9px;vertical-align:2px}
+.rules .why{color:var(--muted);font-size:15.5px}
+
+/* 表 */
+.tw{overflow-x:auto;margin-bottom:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:420px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+th{font-family:var(--display);font-weight:700;background:var(--accent-weak);color:var(--fg);white-space:nowrap}
+tr:last-child td{border-bottom:0}
 
 /* 注意 */
 .note{border-radius:12px;padding:16px 18px;margin:0 0 16px;font-size:16px;border:1px solid}
@@ -82,15 +110,23 @@ figure{margin:0 0 18px;background:var(--surface);border:1px solid var(--line);bo
 figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--fg)}
 figcaption{color:var(--muted);font-size:14.5px;margin-top:10px;text-align:center}
 
+/* 画面の見本 */
+.demo{font-family:var(--display);font-weight:700;border-radius:8px;padding:11px 14px;margin:0 0 8px;font-size:15.5px}
+.demo.y{background:#f9ab00;color:#202124}
+.demo.r{background:#b3261e;color:#fff}
+
 /* 困ったら */
-details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.faqgroup{font-family:var(--display);font-weight:700;font-size:15px;color:var(--muted);letter-spacing:.06em;margin:26px 0 10px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden}
 details[open]{border-color:var(--accent)}
-summary{cursor:pointer;padding:16px 18px;font-family:var(--display);font-weight:700;font-size:17px;list-style:none;line-height:1.6}
+summary{cursor:pointer;padding:15px 44px 15px 18px;font-family:var(--display);font-weight:700;font-size:16.5px;list-style:none;line-height:1.6;position:relative}
 summary::-webkit-details-marker{display:none}
-summary::after{content:"＋";float:right;color:var(--accent)}
+summary::after{content:"＋";position:absolute;right:18px;top:15px;color:var(--accent)}
 details[open] summary::after{content:"－"}
 details>div{padding:0 18px 16px;border-top:1px solid var(--line);padding-top:14px;font-size:16px}
-details p:last-child{margin-bottom:0}
+details p:last-child,details ul:last-child{margin-bottom:0}
+details ul{margin:0 0 12px;padding-left:1.2em}
+details li{margin-bottom:4px}
 
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -98,10 +134,27 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <div class="wrap">
 
+<nav>
+  <ol>
+    <li><a href="#start">やることは3つ</a></li>
+    <li><a href="#login">ログイン</a></li>
+    <li><a href="#tabs">画面</a></li>
+    <li><a href="#day">1日の流れ</a></li>
+    <li><a href="#recv">受け取る</a></li>
+    <li><a href="#out">売り切れ</a></li>
+    <li><a href="#exp">賞味期限</a></li>
+    <li><a href="#order">注文</a></li>
+    <li><a href="#rules">守ること</a></li>
+    <li><a href="#faq">困ったら</a></li>
+  </ol>
+</nav>
+
 <header>
   <h1>アルバイト用<br>かんたん手引き</h1>
   <p class="lede">イベント中にあなたが触るのは、この3つだけ。</p>
 </header>
+
+<h2 id="start" style="margin-top:28px"><span class="no">1</span>やることは3つだけ</h2>
 
 <ul class="three">
   <li>
@@ -134,7 +187,33 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <p>注文を使うイベントでは、ここに<strong>「注文が来たら届ける」</strong>が足される。下で説明する。</p>
 
-<h2><span class="no">1</span>画面のどこを触るか</h2>
+<h2 id="login"><span class="no">2</span>ログインのしかた</h2>
+
+<p>スマホのブラウザでこのURLを開く。<strong>アプリを入れる必要も、アカウントを作る必要も無い。</strong></p>
+<p style="word-break:break-all"><a href="https://tanakat-design.github.io/keishoku/?openExternalBrowser=1">https://tanakat-design.github.io/keishoku/?openExternalBrowser=1</a></p>
+<p style="color:var(--muted);font-size:15.5px">末尾の <code>?openExternalBrowser=1</code> は消さない。LINEで送られたリンクを踏んだとき、LINEの中のブラウザではなく普通のブラウザで開くための呪文。LINEの中で開くと動きがおかしくなる。</p>
+
+<ol class="steps">
+  <li><b>イベントを選ぶ。</b>リストに出てくるのは「表示」になっているイベントだけ。</li>
+  <li><b>スタッフPINを入れる。</b>伏せ字になるので、不安なら右の「表示」を押すと見える。</li>
+  <li><b>自分の名前を入れる。</b>誰が記録したかが残る。フルネームでなくていい。</li>
+</ol>
+
+<p>一度入れば、同じ端末では次から自動で入る。人が交代するときは右上の<strong>「切替」</strong>で名前を入れ直す。</p>
+
+<div class="note warn"><b>PINは2種類ある。</b>あなたが使うのは<strong>スタッフPIN</strong>。<strong>管理者PIN</strong>は社員が使うもので、入れても通らない。</div>
+
+<h3>画面は3つあるが、あなたが使うのは1つ</h3>
+<div class="tw">
+<table>
+  <tr><th>画面</th><th>誰が</th><th>何をする</th></tr>
+  <tr><td><strong>軽食管理アプリ</strong></td><td>あなた</td><td>受取・在庫切れ・期限切れ・注文。<strong>これがあなたの画面。</strong></td></tr>
+  <tr><td>デジタルPOP</td><td>お客様</td><td>モニターに映る品目一覧。売り切れると自動で白黒になる。<strong>触らない。</strong></td></tr>
+  <tr><td>卓上注文</td><td>プレイヤー</td><td>卓のQRから注文する画面。あなたは注文タブで受ける。</td></tr>
+</table>
+</div>
+
+<h2 id="tabs"><span class="no">3</span>画面のどこを触るか</h2>
 
 <figure>
   <svg viewBox="0 0 400 392" role="img" aria-label="画面の上に賞味期限の帯があり、その下に4つのタブが並ぶ。それぞれのタブをいつ触るかを示した図">
@@ -174,7 +253,18 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
   <figcaption>触るのは4つのタブだけ。帯は上に出っぱなしで、閉じられない。</figcaption>
 </figure>
 
-<h2><span class="no">2</span>受け取ったとき</h2>
+<h2 id="day"><span class="no">4</span>1日の流れ</h2>
+
+<ul class="flow">
+  <li><span class="when">開始前</span><span class="what">ログインして<strong>受取タブ</strong>を見る。今日は何時にどの店から何が来るか、支払いは現地か済んでいるかを確かめる。</span></li>
+  <li><span class="when">受取の時間</span><span class="what">現物を受け取る。数を数える。<strong>「受取済みにする」</strong>を押す。カードが緑になる。</span></li>
+  <li><span class="when">営業中</span><span class="what">売れてなくなったら、その場で<strong>在庫切れ記録タブ</strong>から押す。注文が入ったら<strong>注文タブ</strong>に出る。</span></li>
+  <li><span class="when">期限の30分前</span><span class="what"><strong>黄色い帯</strong>が出て、残り時間が1分ずつ減る。片付けの準備をする。</span></li>
+  <li><span class="when">期限を過ぎた</span><span class="what"><strong>赤い帯</strong>に変わる。残りを数えて、赤い帯の中に入れて「登録」。帯が消える。</span></li>
+  <li><span class="when">閉店後</span><span class="what">受取タブの「受取済み ◯/◯件」と期限切れタブを見て、入れ忘れが無いか確かめる。</span></li>
+</ul>
+
+<h2 id="recv"><span class="no">5</span>受け取ったとき</h2>
 
 <figure>
   <svg viewBox="0 0 520 230" role="img" aria-label="受取タブのカード。時間と店名、支払いの黄色い枠、緑の受取済みボタンが並ぶ">
@@ -204,7 +294,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <div class="note warn"><b>「支払い無し」と出たら、払わずに社員を呼ぶ。</b>「払わなくていい」ではなく「何も書かれていない」という意味。現地で請求されたら、その場で払わない。</div>
 
-<h2><span class="no">3</span>売り切れたとき</h2>
+<h2 id="out"><span class="no">6</span>売り切れたとき</h2>
 
 <ol class="steps">
   <li><b>在庫切れ記録タブを開く。</b></li>
@@ -214,9 +304,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <div class="note danger"><b>0個になった瞬間に押す。</b>残り1個のときではない。あとでまとめて入れると、何時に切れたかが残らない。次のイベントで何個頼むかが決められなくなる。</div>
 
-<p>押し忘れたら、品目を選んだときに出る<strong>時刻の欄</strong>に <strong>21:30</strong> のように手で入れれば、実際の時刻で残せる。間違えたら「取消」で戻せる。</p>
+<p>押し忘れたら、品目を選んだときに出る<strong>時刻の欄</strong>に <code>21:30</code> のように手で入れれば、実際の時刻で残せる。間違えたら「取消」で戻せる。</p>
 
-<h2><span class="no">4</span>賞味期限が来たとき</h2>
+<h2 id="exp"><span class="no">7</span>賞味期限が来たとき</h2>
 
 <figure>
   <svg viewBox="0 0 520 206" role="img" aria-label="30分前に黄色い帯が出て、期限を過ぎると赤い帯に変わり、赤い帯のなかに個数の欄と登録ボタンが出る図">
@@ -251,7 +341,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <div class="note warn"><b>11時ぶんと17時ぶんは別々に数える。</b>同じ品目でも帯や画面が分かれている。足して片方に入れると、在庫より多い数になって集計が狂う。</div>
 
-<h2><span class="no">5</span>注文が来たとき</h2>
+<p style="color:var(--muted);font-size:15.5px">鈴は最初の1回だけ鳴る。帯は出っぱなしなので、音を逃しても見れば分かる。</p>
+
+<h2 id="order"><span class="no">8</span>注文が来たとき</h2>
 
 <figure>
   <svg viewBox="0 0 400 324" role="img" aria-label="お客がQRから注文し、スタッフの画面に鈴とともに出て、届けに行くを押し、渡して完了を押すまでの流れ">
@@ -279,43 +371,192 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
     <text x="200" y="272" font-size="15" font-weight="700" text-anchor="middle" fill="#1e6b31">渡して「完了」を押す</text>
     <text x="200" y="292" font-size="12.5" text-anchor="middle" fill="currentColor">ドリチケはこのとき受け取る</text>
   </svg>
-  <figcaption>ドリチケは渡すときに受け取る。品切れで渡せないときは「取消」。</figcaption>
+  <figcaption>品切れで渡せないときは「取消」。理由を選ぶと、お客の画面に出る。</figcaption>
 </figure>
 
 <p><strong>自分の担当する卓だけ出すこともできる。</strong>注文タブの上に「100番台」「200番台」のボタンが出たら、自分の階を押しておく。押した階の注文だけが出て、その階だけ鳴る。</p>
 
 <div class="note ok"><b>注文担当の端末は開きっぱなしにする。</b>画面を閉じると鈴が鳴らない。1台決めて、充電しながら置いておく。</div>
 
-<h2><span class="no">6</span>困ったら</h2>
+<h2 id="rules"><span class="no">9</span>これだけは守ること</h2>
+
+<ul class="rules">
+  <li>
+    <span class="head">品切れはその場で押す</span>
+    <span class="why">何時に切れたかが分からないと、次のイベントで何個頼めばいいかが決められない。閉店後にまとめて入れると、この時刻がまるごと失われる。前回のイベントでは、品切れが10品目あって記録は0件だった。</span>
+  </li>
+  <li>
+    <span class="head">期限切れ数は受取の時間帯ごとに分ける</span>
+    <span class="why">11時受取と17時受取で同じ品目があるとき、残りを合算して片方に入れない。在庫数より多い数になって、集計がマイナスになる。画面も受取ごとに分かれている。</span>
+  </li>
+  <li>
+    <span class="head">注文担当の端末は開きっぱなしにする</span>
+    <span class="why">通知は画面を開いている間しか鳴らない。画面を閉じると注文に気づけない。1台決めて、充電しながら開いておく。</span>
+  </li>
+</ul>
+
+<h2 id="faq"><span class="no">10</span>困ったら</h2>
+<p style="color:var(--muted);font-size:15.5px">毎回聞かれるもの。先にここを見てほしい。</p>
+
+<div class="faqgroup">ログイン</div>
 
 <details>
   <summary>PINが通らない</summary>
-  <div><p>イベントを間違えていないか、上の欄を見る。PINの右の「表示」を押すと、入れた中身が見える。それでも駄目なら、PINを配った人に聞く。</p></div>
+  <div>
+    <ul>
+      <li><strong>イベントを間違えていないか。</strong>PINはイベントごとに違う。上の「イベント」の欄が合っているか見る。</li>
+      <li><strong>管理者PINを入れていないか。</strong>あなたが使うのはスタッフPIN。別物。</li>
+      <li><strong>全角で打っていないか。</strong>全角数字でも通るように直してあるが、古い画面が残っていることがある。ページを再読み込みしてから半角で入れ直す。</li>
+      <li>PINの右の<strong>「表示」</strong>を押すと、入れた中身が見える。</li>
+    </ul>
+    <p>それでも駄目なら、PINを配った人に確認する。</p>
+  </div>
+</details>
+
+<details>
+  <summary>イベントがリストに出てこない</summary>
+  <div><p>そのイベントが「非表示」になっている。社員に言えば切り替えてもらえる。終わったイベントは非表示にしてあるので、<strong>前のイベントを探しても出てこないのが正常。</strong></p></div>
+</details>
+
+<details>
+  <summary>人が交代するとき、どうするか</summary>
+  <div><p>右上の<strong>「切替」</strong>を押して、名前を入れ直す。イベントとPINはそのままでいい。これをやらないと、前の人の名前で記録が残る。</p></div>
+</details>
+
+<div class="faqgroup">在庫切れ</div>
+
+<details>
+  <summary>「在庫切れ」はいつ押すのか</summary>
+  <div><p><strong>その品目が売り切れて、お客様に出せなくなった瞬間。</strong>残り1個になったときではない。0個になったとき。</p><p>押すと、その時刻・品目・押した人がその場で記録される。デジタルPOPもすぐ「SOLD OUT」に変わる。</p></div>
+</details>
+
+<details>
+  <summary>押し忘れた。後から入れられるか</summary>
+  <div><p>入れられる。品目を選ぶと<strong>時刻の欄</strong>が出るので、<code>21:30</code> のように実際に切れた時刻を入れて記録する。備考欄に「気づくのが遅れた」などと書いてもいい。</p><p>深夜0時〜4時台の時刻は、その日の翌日として扱われる。<strong>未来の時刻は入れられない。</strong></p></div>
+</details>
+
+<details>
+  <summary>間違えて在庫切れにした</summary>
+  <div><p>在庫切れ記録タブで、その品目の<strong>「取消」</strong>を押す。元に戻る。記録自体は「取消」として残るので、消えてなくなるわけではない。</p></div>
+</details>
+
+<details>
+  <summary>品切れなのに期限切れタブに出てこない</summary>
+  <div><p>正常。<strong>在庫切れにした品目は期限切れタブから消える。</strong>捨てる分はゼロなので、自動で0として記録される。数を入れる必要はない。</p></div>
+</details>
+
+<div class="faqgroup">期限切れ</div>
+
+<details>
+  <summary>「期限切れ数」には何を入れるのか</summary>
+  <div><p><strong>賞味期限が来て、捨てる数。</strong>売れた数ではない。残っていた数。</p><p>0なら0と入れる。空欄のままだと送信されない。</p></div>
+</details>
+
+<details>
+  <summary>11時受取と17時受取で同じ品目がある。どっちに入れるのか</summary>
+  <div><p><strong>それぞれ別に数えて、別々に入れる。</strong>画面も「11:00 受取分」「17:00 受取分」で分かれている。</p><p>合算して片方に入れると、在庫数より多い数になって集計がおかしくなる。実際にこれが起きて、消費数がマイナスになった行がある。</p></div>
+</details>
+
+<details>
+  <summary>「在庫数より多い期限切れ数があります」と出た</summary>
+  <div><p>入れた数が、設定してある在庫数より多い。だいたい次のどれか。</p>
+  <ul>
+    <li>受取の時間帯を混ぜて数えた（いちばん多い）</li>
+    <li>そもそも届いた数が設定と違った</li>
+    <li>打ち間違い</li>
+  </ul>
+  <p>心当たりがなく、本当にその数なら「OK」で進んでいい。<strong>ただし後で社員に伝える。</strong></p></div>
+</details>
+
+<details>
+  <summary>赤い帯が消えない</summary>
+  <div><p>その受取の品目が、まだ1つも処理されていない。<strong>在庫切れにするか、期限切れ数を入れて「登録」すると消える。</strong></p><p>登録したのに消えないときは、他にもう1件期限切れがある。帯は切れたものから順に並ぶ。</p></div>
 </details>
 
 <details>
   <summary>鈴が鳴らない</summary>
-  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。ブラウザは最初のタップがあるまで音を出せない決まりになっている。どこか1回タップしておく。</p><p>帯は出っぱなしなので、音を逃しても見れば分かる。</p></div>
+  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。<strong>ブラウザは最初のタップがあるまで音を出せない決まりになっている。</strong>どこか1回タップしておく。</p><p>鈴は受取ごとに1回だけ。帯は出っぱなしなので、音を逃しても見れば分かる。</p></div>
 </details>
+
+<details>
+  <summary>賞味期限の帯が出ない品目がある</summary>
+  <div><p>その品目に賞味期限が設定されていない。帯は期限が入っているものにしか出ない。社員に伝えて入れてもらう。</p></div>
+</details>
+
+<div class="faqgroup">受取</div>
+
+<details>
+  <summary>「受取済みにする」は押さないと駄目か</summary>
+  <div><p><strong>押してほしい。</strong>誰が何時に受け取ったかが残る。画面上部に「受取済み 3/8件」と出るので、受け取り漏れがひと目で分かる。</p><p>押すとカードが緑になって「受取済み 17:08・田中」と出る。間違えたら「取消」で戻せる。</p></div>
+</details>
+
+<details>
+  <summary>支払いはどこで見るのか</summary>
+  <div><p>受取タブの、薄い黄色の枠。<strong>支払方法</strong>と<strong>支払金額</strong>が2行で出る。金額は大きく表示される。</p><p>「13日カード払い」「請求書払い」「支払い済み」「都度現地決済」などと書いてある。<strong>現地で払うものだけ、その場で払う。</strong></p></div>
+</details>
+
+<details>
+  <summary>「支払い無し」と出ている</summary>
+  <div><p>元のシートに何も書かれていない、という意味。<strong>払わなくていい、とは限らない。</strong></p><p>現地で請求されたら、払わずに社員に連絡する。</p></div>
+</details>
+
+<details>
+  <summary>受け取った数が設定と違う</summary>
+  <div><p>届いた実数で動く。期限切れ数を入れるときに「在庫数より多い」と出るが、そのまま進めていい。<strong>違っていたことを社員に伝える。</strong>次のイベントの設定に反映される。</p></div>
+</details>
+
+<div class="faqgroup">卓上注文</div>
+
+<details>
+  <summary>注文が入ると在庫は減るのか</summary>
+  <div><p><strong>減らない。</strong>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおり押す。</p><p>だから<strong>注文は受付であって、渡せる保証ではない。</strong>品切れなら取り消す。</p></div>
+</details>
+
+<details>
+  <summary>QRはテーブルごとに違うのか</summary>
+  <div><p><strong>違わない。イベントに1枚。</strong>全テーブルに同じものを置く。プレイヤーが読み取ってから、テーブル番号と席番号を自分で選ぶ。</p><p>登録していないテーブル番号は選べないので、存在しない卓への誤配達は起きない。</p></div>
+</details>
+
+<details>
+  <summary>同じ人が何回も注文してくる</summary>
+  <div><p>制限がかかっている。<strong>1回の注文は合計5個・5種類まで。同じ席は60秒に1件。同じテーブルは10分に5件まで。</strong>それ以上は弾かれる。</p></div>
+</details>
+
+<details>
+  <summary>担当外の注文が「ほったらかし」と鳴った</summary>
+  <div><p>10分経っても誰も取っていない注文は、担当外の端末でも鳴るようにしてある。その階の端末が落ちている可能性がある。<strong>「全部見る」</strong>を押せば出てくるので、手が空いていれば代わりに届ける。</p></div>
+</details>
+
+<div class="faqgroup">通信・端末</div>
 
 <details>
   <summary>電波が無いところで押した</summary>
-  <div><p>そのままでいい。端末に貯めて、つながったときに自動で送る。「未送信が2件あります」と出る。</p><p><strong>タブを閉じると送信が止まる。</strong>電波が戻るまで開いておく。</p></div>
+  <div><p>大丈夫。<strong>端末に貯めて、つながったときに自動で送る。</strong>「未送信が2件あります」と出て、品目には「送信待ち」と出る。</p><p><strong>ブラウザのタブを閉じると送信が止まる。</strong>電波が戻るまで開いておく。</p></div>
 </details>
 
 <details>
-  <summary>人が交代する</summary>
-  <div><p>右上の「切替」を押して、名前を入れ直す。イベントとPINはそのままでいい。やらないと、前の人の名前で記録が残る。</p></div>
+  <summary>画面を閉じていいか</summary>
+  <div><p>記録するだけなら閉じていい。ただし<strong>未送信が残っているときと、注文担当の端末は開いておく。</strong>鈴は画面を開いている間しか鳴らない。</p></div>
 </details>
 
 <details>
-  <summary>受け取った数が足りない</summary>
-  <div><p>届いた実数で進める。期限切れ数を入れるときに「在庫数より多い」と出ても、そのままでいい。<strong>違っていたことを社員に伝える。</strong></p></div>
+  <summary>「◯分前に更新」と出ている</summary>
+  <div><p>最後にサーバーから取り直した時刻。30秒ごとに自動で更新される。<strong>これが3分以上前のままなら、つながっていない。</strong>電波を確認して「更新」を押す。</p><p>この表示があるおかげで、「注文が来ていない」のか「つながっていない」のかを区別できる。</p></div>
+</details>
+
+<details>
+  <summary>二重に押してしまった</summary>
+  <div><p>問題ない。同じ記録が二重に入らないようになっている。他のスタッフが先に押していた場合も、先に押した人の記録が残る。</p></div>
+</details>
+
+<details>
+  <summary>POPが固まった／更新されない</summary>
+  <div><p>30秒ごとに自動で取り直している。止まって見えるときは<strong>ページを再読み込み</strong>する。丸一日つけっぱなしなら、一度リロードしておくと確実。</p></div>
 </details>
 
 <footer>
   <p style="margin-bottom:4px"><strong>迷ったら、押す前に聞く。</strong>押してから直すほうが手間がかかる。</p>
-  <p style="margin:0">もっと細かいことは <a href="manual.html">現場マニュアル（詳しい版）</a>。準備や設定は <a href="manual-admin.html">管理者用</a>。</p>
+  <p style="margin:0">準備や設定をする人は <a href="manual-admin.html">管理者用 かんたん手引き</a>。</p>
 </footer>
 
 </div>
