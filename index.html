@@ -1388,14 +1388,30 @@ function importKeishoku(text, today, split, expH) {
   const isTel = t => /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/.test(t.replace(/[\s（）()]/g, ''));
   const cellOf = (st, s) => { const k = st + '\u0000' + s.col; if (!cells.has(k)) { const si = stInfo[st] || {}; cells.set(k, { rawStore: st, date: s.date, recv: s.time || (si.times || {})[s.label] || '', label: s.label, expRaw: '', itemExp: {}, pay: '', amt: '', items: [] }); } return cells.get(k); };
   const noteRe = /^(.+?)(?:のみ|だけ)?(?:は|[:：]|\s)*(当日中?|本日中|その日中|\d+(?:\.\d+)?\s*時間|(?:\d{1,2}[\/／]\d{1,2}\s+)?\d{1,2}[:：]\d{2}(?::\d{2})?)$/;
+  // 店名の下に続く行（受取方法・住所・電話・支払い）は新しい店舗ではない
+  const isInfoLine = b => /^(住所|所在地|受取場所|受け?取り場所)\s*[:：]/.test(b) || isTel(b)
+    || /払い|支払|決済|請求|カード|現金|振込/.test(b)
+    || /配達|デリバリー|配送|出前|店舗|受け?取|テイクアウト|持ち帰/.test(b);
+  const isTotalLabel = s => /^(小計|合計|総計|計)$/.test(s);
+  // 「計」の行で店舗ブロックが終わる。次にB列に名前が出てきたら、それは新しい店舗である
+  let blockEnd = false;
+  const setStore = (name, r) => {
+    store = name;
+    const t = {}; Object.entries(labelCol).forEach(([lb, c]) => { const hm = parseHM(r[c]); if (hm) t[lb] = hm; });
+    stInfo[store] = { times: t, exp: expCol >= 0 ? String(r[expCol] || '').trim() : '', notes: [] };
+    blockEnd = false;
+  };
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
     if (r.some(c => /^total$/i.test(c))) break; // 「Total」行より下はメモ欄として読まない
-    if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) {
-      store = r[1];
-      const t = {}; Object.entries(labelCol).forEach(([lb, c]) => { const hm = parseHM(r[c]); if (hm) t[lb] = hm; });
-      stInfo[store] = { times: t, exp: expCol >= 0 ? String(r[expCol] || '').trim() : '', notes: [] };
-    } else if (store && expCol >= 0 && String(r[expCol] || '').trim()) {
+    // 「計」「合計」の行。品目として取り込まない（数量だけの列から警告も出さない）
+    if (slots.some(s => isTotalLabel((r[s.col] || '').replace(/\s+/g, '')))) { blockEnd = true; continue; }
+    const b0 = (r[1] || '').replace(/　/g, ' ').trim();
+    const hasItem = slots.some(s => (r[s.col] || '').trim() && /^\d+$/.test(String(r[s.col + 1] || '').replace(/[,\s]/g, '')));
+    if (/^(TRUE|FALSE)$/i.test(r[0] || '') && r[1]) setStore(r[1], r);
+    // A列にチェック欄が無く、店名をB列にそのまま書く形式。品目と数量が並んでいる行だけを店名行と見る
+    else if (b0 && b0 !== store && !/^(TRUE|FALSE)$/i.test(b0) && (blockEnd || (!isInfoLine(b0) && hasItem))) setStore(b0, r);
+    else if (store && expCol >= 0 && String(r[expCol] || '').trim()) {
       // 2行目以降の賞味期限欄：「クリームパンのみ当日中」など品目別の期限
       const m = String(r[expCol]).replace(/\u3000/g, ' ').trim().match(noteRe);
       if (m) stInfo[store].notes.push({ names: m[1].split(/[、,・\/／]/).map(x => x.replace(/\s+/g, '')).filter(Boolean), raw: m[2] });
@@ -1430,7 +1446,7 @@ function importKeishoku(text, today, split, expH) {
       const tg = expTargets(name);
       if (tg) { if (raw) tg.forEach(x => { cellOf(store, s).itemExp[x] = raw; }); return; }
       const qty = raw.replace(/,/g, '');
-      if (name === '計' || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
+      if (isTotalLabel(name) || /^total$/i.test(name) || !/^\d+$/.test(qty) || +qty <= 0) return;
       const nm = (r[s.col] || '').trim();
       cellOf(store, s).items.push({ raw: nm.replace(/\s+/g, ''), name: nm.length <= 2 ? inParen(store) + ' ' + nm : nm, stock: +qty });
     });
