@@ -10,28 +10,34 @@
 
 const SPREADSHEET_ID = '1lBZbAOruZRdXtgd28UfQmsqQb0FgwO_kZZBTRCTA1p8';
 const TZ = 'Asia/Tokyo';
-const SH = { TOURN: 'イベント', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち', RECV: '受取記録' };
+const SH = { TOURN: 'イベント', STOCK: '在庫設定', LOG: '在庫切れログ', CLOSE: '日次残数', POP: 'POP設定', TABLE: '卓', ORDER: '注文', NOTIFY: '通知待ち', RECV: '受取記録', DRINK: 'ドリンク', DOUT: 'ドリンク品切れ' };
 const HEAD = {
   [SH.TOURN]: ['イベントID', 'イベント名', 'スタッフPIN', '有効', '更新日時', '注文受付', '受付時間', '注文トークン'],
   [SH.STOCK]: ['イベントID', 'イベント名', '開催日', '表示順', '品目', '在庫数', '店舗', '受取時間', '賞味期限', '受取方法', '住所', '電話', '支払方法', '支払金額'],
   [SH.LOG]: ['記録日時', 'イベントID', 'イベント名', '開催日', '品目', '入力者', '状態', '取消日時', '取消者', 'リクエストID', '在庫切れ時刻', '備考'],
   [SH.CLOSE]: ['イベントID', 'イベント名', '開催日', '品目', '在庫数', '期限切れ数', '消費数', '在庫切れ時刻', '入力者', '記録日時'],
   [SH.POP]: ['品目', '価格', '写真', '更新日時'], // デジタルPOP用。品目名（受取時間などの（ ）を外した名前）ごとに1行。イベントをまたいで使い回す
-  [SH.TABLE]: ['イベントID', '卓番号', '席数', 'トークン', '有効', '更新日時'], // 卓上注文のQR。トークンを作り直すと過去のQRが一斉に失効する
+  [SH.TABLE]: ['イベントID', '卓番号', '席数', 'トークン', '有効', '更新日時', 'フロア'], // 卓上注文のQR。トークンを作り直すと過去のQRが一斉に失効する。フロアはスタッフ画面の担当ボタンのまとまり
   [SH.ORDER]: ['注文ID', '明細番号', 'イベントID', 'イベント名', '開催日', '卓', '席', '品目', '個数', 'ドリチケ', '状態', '取消理由', '照会キー', 'リクエストID', '受付日時', '担当者', '担当端末', '担当日時', '完了日時', '操作履歴'],
   [SH.NOTIFY]: ['通知ID', '種別', '本文', '状態', '作成日時', '送信日時', '試行回数', 'エラー'], // 外部通知はロックの外で、ここを経由して送る
   // 受取済みのチェック。店舗×受取時間ごとに1行だけ持つ（押し直すと上書き、取消すと行が消える）
   [SH.RECV]: ['イベントID', 'イベント名', '開催日', '店舗', '受取時間', '状態', '受取日時', '担当者', '記録日時'],
+  // 卓上注文で頼めるドリンク。イベントごとにほとんど変わらないので全イベント共通で1つだけ持つ
+  [SH.DRINK]: ['品目', 'ドリチケ', '表示順', '有効', '更新日時'],
+  // 品切れにしたドリンク。イベント×開催日×品目ごとに1行だけ持ち、戻すと行が消える（受取記録と同じ作り）
+  [SH.DOUT]: ['イベントID', '開催日', '品目', '記録日時', '入力者'],
 };
 // 文字列として保持する列（日付・PIN・時刻の自動変換を防ぐ）
 const TEXT_COLS = {
   // 支払金額は「38,000円」「７，４８０円」のように書かれるので数値にせず文字のまま持つ
   [SH.TOURN]: [1, 3, 7, 8], [SH.STOCK]: [1, 3, 8, 9, 12, 13, 14], [SH.LOG]: [2, 4, 10, 12], [SH.CLOSE]: [1, 3, 8], [SH.POP]: [1, 3],
   [SH.TABLE]: [1, 2, 4], [SH.ORDER]: [1, 3, 5, 6, 7, 13, 14], [SH.NOTIFY]: [1], [SH.RECV]: [1, 3, 5],
+  [SH.DRINK]: [1], [SH.DOUT]: [1, 2, 3],
 };
 const TIME_COLS = {
   [SH.TOURN]: [5], [SH.LOG]: [1, 8, 11], [SH.CLOSE]: [10], [SH.POP]: [4],
   [SH.TABLE]: [6], [SH.ORDER]: [15, 18, 19], [SH.NOTIFY]: [5, 6], [SH.RECV]: [7, 9],
+  [SH.DRINK]: [5], [SH.DOUT]: [4],
 };
 /* 注文の設定（必要なら変える） */
 const ORD = {
@@ -62,6 +68,7 @@ const API = {
   getOrderMenu: getOrderMenu, placeOrder: placeOrder, getOrder: getOrder, setOrder: setOrder,
   adminTables: adminTables, adminSaveTable: adminSaveTable, adminOrderOpen: adminOrderOpen,
   adminOrderToken: adminOrderToken, adminSetTables: adminSetTables, adminPreviewTables: adminPreviewTables,
+  adminDrinks: adminDrinks, adminSaveDrinks: adminSaveDrinks, markDrinkOut: markDrinkOut,
 };
 function doPost(e) {
   let out;
@@ -161,7 +168,13 @@ function getDayState(tid, pin, date) {
   st.orderHours = t.orderHours;
   // 卓の一覧も返す。スタッフ画面が「何階の担当か」のボタンを作るのに使う。
   // 注文が1件も入っていない時点でも選べるようにするため、注文から推測せずここで渡す
-  st.tables = tables_(str_(tid)).filter(function (x) { return x.active; }).map(function (x) { return x.table; });
+  const tbs = tables_(str_(tid)).filter(function (x) { return x.active; });
+  st.tables = tbs.map(function (x) { return x.table; });
+  // フロア（「B2」「6F」など）を決めてある卓だけ返す。決めていなければ画面が百の位でまとめる。
+  // 卓番号の百の位が階と一致しない会場（B2に100〜400番台が全部ある）があるため
+  st.tableFloors = {};
+  tbs.forEach(function (x) { if (x.floor) st.tableFloors[x.table] = x.floor; });
+  st.drinks = drinkList_(str_(tid), date);   // 品切れボタンを出すため、スタッフ画面にも渡す
   return st;
 }
 
@@ -468,12 +481,95 @@ function onSale_(t, date) {
     if (it.exp && !(now < it.exp)) return; // 賞味期限を過ぎた
     map[popBase_(it.name)] = true;
   });
+  // ドリンクは在庫も賞味期限も持たない。その日に品切れにされていなければ頼める
+  drinkList_(t.id, date).forEach(function (d) { if (!d.soldOut) map[d.name] = true; });
   return map;
 }
 
+/* ---------- ドリンク（全イベント共通の一覧＋その日だけの品切れ） ---------- */
+
+/** ドリンクの一覧。表示順の小さいものから。シートが無くても空として読む */
+function drinks_() {
+  return rowsSoft_(SH.DRINK).map(function (r) {
+    return { name: str_(r[0]), price: num_(r[1]), order: Number(r[2]) || 0, active: str_(r[3]) !== '無効' };
+  }).filter(function (x) { return x.name; }).sort(function (a, b) { return a.order - b.order; });
+}
+
+/** その日に品切れにされたドリンク。{品目: true} */
+function drinkOut_(tid, date) {
+  const m = Object.create(null);   // 品目名はプレイヤーから来るので継承プロパティを拾わせない
+  rowsSoft_(SH.DOUT).forEach(function (r) {
+    if (str_(r[0]) === str_(tid) && ds_(r[1]) === str_(date)) m[str_(r[2])] = true;
+  });
+  return m;
+}
+
+/** 注文画面・スタッフ画面に出すドリンク。品切れも soldOut を立てて返す（消さずに灰色で出すため） */
+function drinkList_(tid, date) {
+  const out = drinkOut_(tid, date);
+  return drinks_().filter(function (x) { return x.active; }).map(function (x) {
+    return { name: x.name, price: x.price, soldOut: !!out[x.name] };
+  });
+}
+
+/** ドリンクをその日だけ品切れにする（on が false なら戻す）。スタッフPINで押せる */
+function markDrinkOut(tid, pin, date, name, on, staff) {
+  const t = staff_(tid, pin);
+  const nm = str_(name);
+  return withLock_(function () {
+    // 一覧にあるドリンクだけ。古い画面からの送信で、ありもしない品目の行が増えないようにする
+    if (!drinks_().some(function (d) { return d.active && d.name === nm; })) {
+      throw new Error('そのドリンクは一覧にありません。画面を更新してください');
+    }
+    ensureSheet_(SH.DOUT);
+    const add = on === false ? [] : [[t.id, date, nm, new Date(), str_(staff)]];
+    replace_(SH.DOUT, function (r) {
+      return str_(r[0]) === t.id && ds_(r[1]) === date && str_(r[2]) === nm;
+    }, add);
+    return drinkList_(t.id, date);
+  });
+}
+
+/**
+ * ドリンクの一覧をまとめて設定する。1行1品目で、行末の数字がドリチケ枚数になる。
+ *   コーラ 1
+ *   ハイボール 2
+ *   #ホットコーヒー        ← 頭に # を付けた行は無効（消さずに残して隠す）
+ * 書いた行がそのまま一覧になり、書かなかった品目は消える。その日の品切れの記録は残る
+ * （同じ名前で入れ直すと品切れのまま出るので、必要なら戻してもらう）。
+ */
+function adminSaveDrinks(pin, spec) {
+  admin_(pin);
+  const rows = [], seen = Object.create(null);
+  const now = new Date();
+  str_(spec).split(/[\r\n]+/).forEach(function (line) {
+    let t = str_(line).replace(/　/g, ' ').trim();
+    if (!t) return;
+    let active = '有効';
+    if (/^[#＃]/.test(t)) { active = '無効'; t = t.replace(/^[#＃]\s*/, ''); }
+    let price = '';
+    const m = t.match(/^(.*\S)[\s,、]+(\d{1,2})$/);
+    if (m) { t = m[1].trim(); price = Number(m[2]); }
+    if (!t) return;
+    if (t.length > 60) throw new Error('品目名が長すぎます：' + t);
+    if (seen[t]) return;
+    seen[t] = 1;
+    rows.push([t, price, rows.length + 1, active, now]);
+    if (rows.length > 60) throw new Error('ドリンクは60までにしてください');
+  });
+  return withLock_(function () {
+    ensureSheet_(SH.DRINK);
+    replace_(SH.DRINK, function () { return true; }, rows);
+    return drinks_();
+  });
+}
+
+/** ドリンクの一覧（管理画面用。無効のものも返す） */
+function adminDrinks(pin) { admin_(pin); return drinks_(); }
+
 function tables_(tid) {
   return rows_(SH.TABLE).filter(function (r) { return str_(r[0]) === tid; }).map(function (r) {
-    return { table: str_(r[1]), seats: Number(r[2]) || 0, token: str_(r[3]), active: str_(r[4]) !== '無効' };
+    return { table: str_(r[1]), seats: Number(r[2]) || 0, token: str_(r[3]), active: str_(r[4]) !== '無効', floor: str_(r[6]) };
   });
 }
 
@@ -600,6 +696,8 @@ function getOrderMenu(tid, token) {
   st.tables = tables_(str_(tid)).filter(function (x) { return x.active; }).map(function (x) { return { table: x.table, seats: x.seats }; });
   st.open = !!(t.orderOpen && inHours_(t.orderHours));
   st.hours = t.orderHours;
+  // ドリンクは在庫設定に入れない（在庫も賞味期限も持たない）。全イベント共通の一覧から別枠で返す
+  st.drinks = drinkList_(str_(tid), bizDate_());
   return st;
 }
 
@@ -640,6 +738,8 @@ function placeOrder(tid, token, table, seat, items, reqId) {
     list.forEach(function (x) { if (!sale[x.name]) throw new Error('「' + x.name + '」はただいま注文できません'); });
     limitCheck_(tid, date, table, c.seat);
     const price = popPrices_();
+    // ドリンクはPOP設定に無いので、一覧の枚数を足す。同じ名前がPOP設定にもあればそちらを優先する
+    drinks_().forEach(function (d) { if (!price[d.name]) price[d.name] = { price: d.price }; });
     const now = new Date();
     const id = newOrderId_();
     const key = rnd_(12);
@@ -713,7 +813,8 @@ function adminTables(pin, tid) {
   // openNow は「いま実際に受け付けているか」。受付中でも受付時間外なら false。
   // 時間の書き方を間違えると全部の注文が静かに弾かれるので、管理画面で見えるようにする
   return { tables: tables_(str_(tid)), orderOpen: t.orderOpen, orderHours: t.orderHours, orderToken: t.orderToken,
-    openNow: !!(t.orderOpen && inHours_(t.orderHours)), hoursOk: !str_(t.orderHours) || inHoursValid_(t.orderHours) };
+    openNow: !!(t.orderOpen && inHours_(t.orderHours)), hoursOk: !str_(t.orderHours) || inHoursValid_(t.orderHours),
+    drinks: drinks_() };   // ドリンクは全イベント共通。同じ画面で直せるようにここで返す
 }
 
 /** イベントの注文トークンを発行・再発行する。作り直すと、刷ってあるQRが一斉に使えなくなる */
@@ -741,34 +842,50 @@ function adminOrderToken(pin, tid) {
  *   混ぜてもよい：「101-110, 201-205, VIP」
  * 区切りは カンマ・読点・空白・改行。
  */
-function parseTableSpec_(spec) {
+/**
+ * 卓番号を解釈して [{table, floor}] を返す。
+ * 行の頭に「B2:」のように書くとフロア名になり、次のフロア名が出るまでの卓がそのフロアになる。
+ *   B2: 100-102, 201-212
+ *   6F: 600-620
+ * フロア名を書かない行はフロアなし（スタッフ画面は百の位でまとめる従来どおりの動き）。
+ * 卓番号そのものに「:」は使えないが、8文字以内という制限があるので実害はない。
+ */
+function parseTableRows_(spec) {
   const out = [], seen = {};
+  let floor = '';
   const add = function (name) {
     name = str_(name);
     if (!name) return;
     if (name.length > 8) throw new Error('卓番号は8文字以内にしてください：' + name);
     if (seen[name]) return;
-    seen[name] = 1; out.push(name);
+    seen[name] = 1; out.push({ table: name, floor: floor });
     if (out.length > 60) throw new Error('卓は60までにしてください');
   };
   str_(spec).replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
-    .split(/[,、\s]+/).forEach(function (tk) {
-      tk = str_(tk);
-      if (!tk) return;
-      const m = tk.match(/^(\d+)\s*[-−〜～]\s*(\d+)$/);
-      if (!m) { add(tk); return; }
-      const a = Number(m[1]), b = Number(m[2]);
-      const w = /^0/.test(m[1]) ? m[1].length : 0;   // 先頭が0なら桁をそろえる
-      if (!(b >= a)) throw new Error('範囲の指定が逆です：' + tk);
-      if (b - a > 59) throw new Error('範囲が広すぎます：' + tk);
-      for (let i = a; i <= b; i++) add(w ? String(i).padStart(w, '0') : String(i));
+    .split(/[\r\n]+/).forEach(function (line) {
+      const lm = line.match(/^\s*([^:\s,、][^:]{0,7})\s*:\s*([\s\S]*)$/);
+      if (lm) { floor = lm[1].replace(/\s+$/, ''); line = lm[2]; }
+      line.split(/[,、\s]+/).forEach(function (tk) {
+        tk = str_(tk);
+        if (!tk) return;
+        const m = tk.match(/^(\d+)\s*[-−〜～]\s*(\d+)$/);
+        if (!m) { add(tk); return; }
+        const a = Number(m[1]), b = Number(m[2]);
+        const w = /^0/.test(m[1]) ? m[1].length : 0;   // 先頭が0なら桁をそろえる
+        if (!(b >= a)) throw new Error('範囲の指定が逆です：' + tk);
+        if (b - a > 59) throw new Error('範囲が広すぎます：' + tk);
+        for (let i = a; i <= b; i++) add(w ? String(i).padStart(w, '0') : String(i));
+      });
     });
   if (!out.length) throw new Error('卓番号を入力してください');
   return out;
 }
 
-/** 卓番号を解釈だけして返す（画面で確認するため） */
-function adminPreviewTables(pin, spec) { admin_(pin); return parseTableSpec_(spec); }
+/** 卓番号だけを並べて返す（フロアを見ないところ用） */
+function parseTableSpec_(spec) { return parseTableRows_(spec).map(function (x) { return x.table; }); }
+
+/** 卓番号を解釈だけして返す（画面で確認するため）。[{table, floor}] を返す */
+function adminPreviewTables(pin, spec) { admin_(pin); return parseTableRows_(spec); }
 
 /**
  * 卓の一覧をまとめて設定する。spec に書いた卓がそのイベントの卓になる。
@@ -777,16 +894,16 @@ function adminPreviewTables(pin, spec) { admin_(pin); return parseTableSpec_(spe
 function adminSetTables(pin, tid, spec, seats) {
   admin_(pin);
   tid = str_(tid);
-  const names = parseTableSpec_(spec);
+  const list = parseTableRows_(spec);
   const s = Number(seats);
   if (!(s >= 1 && s <= 20 && s === Math.floor(s))) throw new Error('席数は1〜20の整数で入力してください');
   return withLock_(function () {
     const old = {};
     rows_(SH.TABLE).forEach(function (r) { if (str_(r[0]) === tid) old[str_(r[1])] = r; });
     const now = new Date();
-    const rows = names.map(function (n) {
-      const o = old[n];
-      return [tid, n, o ? (Number(o[2]) || s) : s, o ? str_(o[3]) : '', o ? str_(o[4]) || '有効' : '有効', now];
+    const rows = list.map(function (x) {
+      const n = x.table, o = old[n];
+      return [tid, n, o ? (Number(o[2]) || s) : s, o ? str_(o[3]) : '', o ? str_(o[4]) || '有効' : '有効', now, x.floor];
     });
     replace_(SH.TABLE, function (r) { return str_(r[0]) === tid; }, rows);
     return tables_(tid);
@@ -807,7 +924,8 @@ function adminSaveTable(pin, tid, table, seats, active, token) {
     all.forEach(function (r, i) { if (str_(r[0]) === tid && str_(r[1]) === table) idx = i; });
     const old = idx >= 0 ? str_(all[idx][3]) : '';
     const tk = (str_(token) === 'new' || !old) ? rnd_(16) : old;
-    const row = [tid, table, n, tk, str_(active) === '無効' ? '無効' : '有効', new Date()];
+    // フロアは一括設定で決めるので、ここでは今の値をそのまま残す（空で上書きしない）
+    const row = [tid, table, n, tk, str_(active) === '無効' ? '無効' : '有効', new Date(), idx >= 0 ? str_(all[idx][6]) : ''];
     if (idx >= 0) sh.getRange(idx + 2, 1, 1, HEAD[SH.TABLE].length).setValues([row]);
     else append_(SH.TABLE, [row]);
     return tables_(tid);

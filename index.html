@@ -28,6 +28,8 @@ button{font-size:16px;border:none;border-radius:10px;padding:12px 16px;cursor:po
 .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0 4px}
 .chip{flex:0 0 auto;background:#fff;border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:20px;font-weight:500}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.out{background:#fdecea;border-color:var(--danger);color:var(--danger);font-weight:700}
+.chips.wrap{flex-wrap:wrap;overflow:visible}
 .tabs{display:flex;background:var(--muted);border-radius:10px;padding:4px;margin:12px 0}
 .tab{flex:1;background:none;color:var(--sub);padding:10px}
 .tab.on{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -594,12 +596,16 @@ function deviceId() { let d = LS.get('kDevice', ''); if (!d) { d = Date.now().to
 /* --- 担当する卓（フロア）---
  * フロアごとに端末を1台置く運用のために、注文の表示と通知を卓番号で絞る。
  * 絞るのは「表示」だけで、サーバーには何も送らない。選んだ内容は端末ごとに覚える。
- * 卓番号は会場ごとに階で分かれている（例：1階=100番台、2階=200番台）前提で、百の位でまとめる。 */
+ * まとまりは管理画面の卓設定で決めたフロア（「B2」「6F」など）。決めていなければ卓番号の百の位でまとめる。 */
 function areaKey() { const s = S.session; return 'kOrdArea:' + (s ? s.tid : ''); }
 function myArea() { return String(LS.get(areaKey(), '') || ''); }
 function setArea(a) { LS.set(areaKey(), a); checkOrders.seen = {}; render(); }
 function areaOf(table) {
   const t = String(table == null ? '' : table).trim();
+  // 管理画面の卓設定で「B2: 100-102」のようにフロアを決めてあれば、それを使う。
+  // 卓番号の百の位が階と一致しない会場（B2に100〜400番台が全部ある）があるため
+  const f = (S.day && S.day.tableFloors) || {};
+  if (f[t]) return f[t];
   if (!/^\d+$/.test(t)) return 'その他';        // VIP など数字でない卓
   const n = Number(t);
   return n >= 100 ? Math.floor(n / 100) + '00番台' : 'その他';
@@ -608,8 +614,13 @@ function areaOf(table) {
 function areaList() {
   const t = (S.day && S.day.tables) || [];
   const m = new Map();
-  t.forEach(x => { const a = areaOf(x); m.set(a, (m.get(a) || 0) + 1); });
-  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  t.forEach(x => {
+    const a = areaOf(x), n = /^\d+$/.test(String(x).trim()) ? Number(x) : Infinity;
+    const e = m.get(a) || { n: 0, min: Infinity };
+    e.n++; if (n < e.min) e.min = n; m.set(a, e);
+  });
+  // 並びは、そのまとまりで一番小さい卓番号の順。「B2」「6F」のような名前でも会場の並びどおりになる
+  return [...m.entries()].sort((a, b) => a[1].min - b[1].min || (a[0] < b[0] ? -1 : 1)).map(([a, e]) => [a, e.n]);
 }
 function inMyArea(table) { const a = myArea(); return !a || areaOf(table) === a; }
 function areaChips() {
@@ -633,7 +644,7 @@ function orderHtml() {
   const head = `<div class="notice ${open ? 'info' : 'warn'}">${
     open ? '卓上からの注文を受け付けています。'
       : d.orderOpen ? `いまは受付時間外です（${esc(d.orderHours || '')}）。注文は届きません。`
-      : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>` + areaChips() +
+      : '卓上からの注文は停止中です（管理画面で切り替えます）。'}</div>` + areaChips() + drinkHtml() +
     (hidden ? `<div class="notice warn" style="margin-top:8px">ほかの担当ぶんの注文を${hidden}件隠しています。<button class="link" onclick="setArea('')">全部見る</button></div>` : '');
   if (!os.length) return head + '<div class="card empty">未対応の注文はありません</div>';
   const byId = [];
@@ -654,6 +665,48 @@ function orderHtml() {
       </div></div>`;
   }).join('');
 }
+/* --- ドリンクの品切れ（その日だけ。一覧そのものは全イベント共通で管理画面にある） --- */
+// 送信待ちは本番の記録より優先して出す（受取済みボタンと同じ考え方）
+function pendingDrink() {
+  const m = new Map(); const s = S.session; if (!s) return m;
+  queue().forEach(j => { if (j.kind === 'dout' && j.tid === s.tid && j.date === S.date) m.set(j.key, j.on); });
+  return m;
+}
+function drinkOutState() {
+  const ds = (S.day && S.day.drinks) || [], q = pendingDrink();
+  return ds.map(d => ({ name: d.name, out: q.has(d.name) ? q.get(d.name) : !!d.soldOut, wait: q.has(d.name) }));
+}
+function drinkHtml() {
+  const st = drinkOutState();
+  if (!st.length) return '';
+  const n = st.filter(x => x.out).length;
+  // 品目名を onclick に埋めるとクォートで壊れるため、番号だけ渡す（受取の S.rg と同じ理由）
+  return `<div class="card" style="margin-top:8px"><div style="font-weight:700">ドリンクの品切れ${n ? '（' + n + '件）' : ''}</div>
+    <div class="small" style="margin-top:4px">押すと、その日だけ卓上の注文画面から消えます。入ったらもう一度押して戻します。</div>
+    <div class="chips wrap" style="margin-top:4px">${st.map((x, i) =>
+      `<button class="chip ${x.out ? 'out' : ''}" ${S.busy ? 'disabled' : ''} onclick="toggleDrink(${i})">${esc(x.name)}${x.out ? '　品切れ' : ''}${x.wait ? '（送信待ち）' : ''}</button>`).join('')}</div></div>`;
+}
+async function toggleDrink(i) {
+  if (S.busy) return;
+  const st = drinkOutState()[i]; if (!st) return;
+  const on = !st.out;
+  if (on && !confirm('「' + st.name + '」を品切れにしますか？\n\nこの日の卓上の注文画面から消えます。入ったらもう一度押して戻せます。')) return;
+  const s = S.session, date = S.date;
+  const args = [s.tid, s.pin, date, st.name, on, s.staff];
+  S.busy = true; render();
+  try {
+    const list = await call('markDrinkOut', ...args);
+    if (S.day) { S.day.drinks = list; LS.set(dayKey(s.tid, date), S.day); }
+    toast(on ? '品切れにしました' : '品切れを戻しました');
+  } catch (e) {
+    if (isNetErr(e)) {
+      enqueue({ fn: 'markDrinkOut', args, kind: 'dout', tid: s.tid, date: date, key: st.name, on: on });
+      toast('通信できないため端末に保存しました。回復後に自動送信します');
+    } else toast(errMsg(e));
+  }
+  S.busy = false; render();
+}
+
 async function ordSet(id, state, reason) {
   const s = S.session;
   const tid = s.tid, date = S.date;
@@ -988,16 +1041,24 @@ function renderAdminOrd() {
     </div>` : '<div class="card"><div class="small">「受付を開始する」を押すとQRが出ます。</div></div>'}
     <div class="card"><div style="font-weight:700">テーブルの設定</div>
       <div class="small" style="margin-top:4px">使うテーブル番号を書きます。<b>101-110</b> のように範囲で書けます。<b>001-012</b> と書けばゼロ付きのまま作ります。カンマ・空白・改行で区切り、番号でなくても構いません（例：VIP）。</div>
-      <textarea id="ordSpec" rows="3" style="width:100%;margin-top:8px;font-size:15px;padding:8px" placeholder="例：101-110, 201-205">${esc(o.spec != null ? o.spec : tbs.map(t => t.table).join(', '))}</textarea>
+      <div class="small" style="margin-top:4px">行の頭に <b>B2:</b> のように書くと<b>フロア</b>になります。スタッフ画面の「担当する卓」のボタンがそのまとまりになります。書かなければ卓番号の百の位（100番台・200番台…）でまとまります。</div>
+      <textarea id="ordSpec" rows="4" style="width:100%;margin-top:8px;font-size:15px;padding:8px" placeholder="例：&#10;B2: 100-102, 201-212, 301-314, 401-406&#10;6F: 600-620">${esc(o.spec != null ? o.spec : tblSpecText(tbs))}</textarea>
       <div class="popctl" style="margin-top:8px"><span class="small">席数</span><input id="ordS2" inputmode="numeric" style="width:70px" value="${tbs.length ? tbs[0].seats : 9}">
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordPreview()">確認</button>
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSetTables()">この内容にする</button></div>
-      ${o.preview ? `<div class="notice info" style="margin-top:8px">${o.preview.length}卓になります：${esc(o.preview.join('、'))}</div>` : ''}
+      ${o.preview ? `<div class="notice info" style="margin-top:8px">${o.preview.length}卓になります。<br>${tblPrevHtml(o.preview)}</div>` : ''}
       <div class="small" style="margin-top:6px">書いた卓がそのままこのイベントの卓になります。すでにある卓の席数はそのまま残り、書かなかった卓は消えます。</div>
+    </div>
+    <div class="card"><div style="font-weight:700">ドリンクの設定（全イベントで共通）</div>
+      <div class="small" style="margin-top:4px">卓上の注文画面に出すドリンクです。<b>1行に1つ</b>、行の終わりの数字が<b>ドリチケ枚数</b>になります（省略可）。頭に <b>#</b> を付けた行は残したまま隠します。</div>
+      <div class="small" style="margin-top:4px">ここはイベントごとではなく<b>全イベント共通</b>です。直すとほかのイベントにも効きます。イベント中に切れたものは、スタッフ画面の「注文」タブで<b>その日だけ</b>品切れにできます。</div>
+      <textarea id="ordDr" rows="6" style="width:100%;margin-top:8px;font-size:15px;padding:8px" placeholder="例：&#10;コーラ 1&#10;ウーロン茶 1&#10;ハイボール 2&#10;#ホットコーヒー">${esc(o.dspec != null ? o.dspec : (o.drinks || []).map(d => (d.active ? '' : '#') + d.name + (d.price === '' || d.price == null ? '' : ' ' + d.price)).join('\n'))}</textarea>
+      <div class="popctl" style="margin-top:8px"><button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSetDrinks()">この内容にする</button></div>
+      ${o.drinks == null ? '' : `<div class="small" style="margin-top:6px">いま注文できるのは ${(o.drinks || []).filter(d => d.active).length} 種類です。${(o.drinks || []).filter(d => !d.active).length ? '（ほかに隠してあるものが' + (o.drinks || []).filter(d => !d.active).length + '件）' : ''}</div>`}
     </div>
     ${o.tables == null ? '<div class="card empty">読み込み中…</div>' : tbs.length ? `<div class="card"><div style="font-weight:700">登録済みのテーブル（${tbs.length}）</div>
       <div class="small" style="margin-top:4px">席数が違うテーブルは、ここで直します。</div>
-      ${tbs.map(tb => `<div class="popctl" style="margin-top:8px"><span style="flex:1">${esc(tb.table)}　<span class="small">${tb.active ? '' : '無効　'}</span></span>
+      ${tbs.map(tb => `<div class="popctl" style="margin-top:8px"><span style="flex:1">${esc(tb.table)}　<span class="small">${tb.floor ? esc(tb.floor) + '　' : ''}${tb.active ? '' : '無効　'}</span></span>
         <span class="small">席数</span><input id="st_${esc(tb.table)}" inputmode="numeric" style="width:60px" value="${tb.seats}">
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSeats('${esc(tb.table)}')">保存</button>
         <button class="btn-sub" ${o.busy ? 'disabled' : ''} onclick="ordSave('${esc(tb.table)}', ${tb.seats}, ${tb.active ? 'false' : 'true'})">${tb.active ? '無効にする' : '有効にする'}</button></div>`).join('')}
@@ -1034,6 +1095,28 @@ async function ordReissue() {
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
 function ordSpecValue() { const e = document.getElementById('ordSpec'); return e ? e.value : ''; }
+/** サーバーが返す卓の一覧（[{table, floor}]）を、フロアごとにまとめる。並びは出てきた順 */
+function tblByFloor(list) {
+  const m = new Map();
+  (list || []).forEach(x => {
+    const t = typeof x === 'string' ? x : x.table, f = (typeof x === 'string' ? '' : x.floor) || '';
+    if (!m.has(f)) m.set(f, []);
+    m.get(f).push(t);
+  });
+  return [...m.entries()];
+}
+/** 登録済みの卓から、入力欄に出す文字列を作る。フロアを決めてあれば「B2: 100, 101」の形に戻す */
+function tblSpecText(tbs) {
+  const g = tblByFloor(tbs);
+  if (g.length === 1 && g[0][0] === '') return g[0][1].join(', ');
+  // フロアなしの行は最後に回す（頭に置くと、次の行のフロア名より前にあることが分かりにくい）
+  return g.sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1))
+    .map(([f, t]) => (f ? f + ': ' : '') + t.join(', ')).join('\n');
+}
+/** 「この内容にする」の前に見せる確認用 */
+function tblPrevHtml(list) {
+  return tblByFloor(list).map(([f, t]) => (f ? '<b>' + esc(f) + '</b>（' + t.length + '卓）：' : '') + esc(t.join('、'))).join('<br>');
+}
 /** 書いた内容がどう解釈されるかだけ見る。保存はしない */
 async function ordPreview() {
   const id = S.ord.id, spec = ordSpecValue();
@@ -1048,11 +1131,27 @@ async function ordSetTables() {
   S.ord.spec = spec;
   let list;
   try { list = await call('adminPreviewTables', S.admin.pin, spec); } catch (e) { return toast(errMsg(e)); }
-  const gone = (S.ord.tables || []).filter(t => list.indexOf(t.table) < 0).map(t => t.table);
-  if (!confirm(list.length + '卓にします。\n\n' + list.join('、') + (gone.length ? '\n\n消える卓：' + gone.join('、') : '') + '\n\nよろしいですか？')) return;
+  // サーバーが古い版だと卓番号の配列、新しい版だと {table, floor} の配列。どちらでも動くようにする
+  const names = (list || []).map(x => (typeof x === 'string' ? x : x.table));
+  const gone = (S.ord.tables || []).filter(t => names.indexOf(t.table) < 0).map(t => t.table);
+  const lines = tblByFloor(list).map(([f, t]) => (f ? f + '（' + t.length + '卓）：' : '') + t.join('、')).join('\n');
+  if (!confirm(names.length + '卓にします。\n\n' + lines + (gone.length ? '\n\n消える卓：' + gone.join('、') : '') + '\n\nよろしいですか？')) return;
   S.ord.busy = true; render();
   try { const r = await call('adminSetTables', S.admin.pin, id, spec, Number(s)); if (!ordSame(id)) return; S.ord.tables = r; S.ord.spec = null; S.ord.preview = null; toast('設定しました'); }
   catch (e) { if (ordSame(id)) toast(errMsg(e)); }
+  finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
+}
+/** ドリンクの一括設定。全イベント共通なので、ほかのイベントにも効くことを確かめてから送る */
+async function ordSetDrinks() {
+  const id = S.ord.id, e = document.getElementById('ordDr'), spec = e ? e.value : '';
+  S.ord.dspec = spec;
+  const lines = spec.split('\n').map(x => x.trim()).filter(Boolean);
+  const live = lines.filter(x => !/^[#＃]/.test(x));
+  if (!confirm('ドリンクを' + live.length + '種類にします。\n\n' + (live.join('\n') || '（なし）') +
+    '\n\nこの一覧は全イベントで共通です。よろしいですか？')) return;
+  S.ord.busy = true; render();
+  try { const r = await call('adminSaveDrinks', S.admin.pin, spec); if (!ordSame(id)) return; S.ord.drinks = r; S.ord.dspec = null; toast('設定しました'); }
+  catch (e2) { if (ordSame(id)) toast(errMsg(e2)); }
   finally { if (ordSame(id)) { S.ord.busy = false; render(); } }
 }
 /** 1卓だけ席数を変える */

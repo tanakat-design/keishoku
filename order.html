@@ -31,6 +31,7 @@ h1{font-size:20px;margin:0 0 2px}
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .nm{flex:1;min-width:0;font-weight:700;line-height:1.35}
 .tk{font-size:13px;color:var(--accent);font-weight:600;margin-top:2px}
+.sec{font-weight:700;font-size:15px;padding:2px 0 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
 .qty{display:flex;align-items:center;gap:6px;flex:none}
 .qty button{width:38px;height:38px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:20px;line-height:1;cursor:pointer;color:var(--text)}
 .qty button:disabled{opacity:.35;cursor:default}
@@ -109,6 +110,8 @@ function onSale() {
     if (!live.length || !live.some(r => !r.sold)) return;
     out.push({ base, info: d.info[base] || {} });
   });
+  // ドリンクは在庫も賞味期限も持たない。その日に品切れにされていなければ出す
+  (d.drinks || []).forEach(x => { if (!x.soldOut) out.push({ base: x.name, info: { price: x.price }, drink: true }); });
   return out;
 }
 const ticketOf = info => (info.price !== '' && info.price != null ? Number(info.price) : 0);
@@ -280,19 +283,30 @@ function render() {
   const list = S.menu = onSale();   // ボタンからは品目名ではなく番号で指す（品目名を onclick に埋めると、名前に ' が入ったとき壊れる・実行される）
   const stale = S.err ? `<div class="notice warn">${esc(S.err)}　最新の在庫を確認できていません。注文する前に「更新」を押してください。</div>` : '';
   app.innerHTML = head + stale + (queue().length ? '<div class="notice warn">送信待ちの注文があります。</div>' : '') +
-    (list.length ? `<div class="card">${list.map((x, i) => {
-      const c = S.qty[x.base] || 0, tk = ticketOf(x.info), img = S.imgs[x.base];
-      return `<div class="it">
-        <div class="ph">${img ? `<img src="${esc(img)}" alt="">` : esc(Array.from(x.base)[0] || '')}</div>
-        <div class="nm">${esc(x.base)}${tk ? `<div class="tk">ドリチケ${tk}枚</div>` : ''}</div>
-        <div class="qty"><button onclick="bump(${i},-1)" ${c ? '' : 'disabled'}>−</button><span>${c}</span><button onclick="bump(${i},1)">＋</button></div>
-      </div>`;
-    }).join('')}</div>` : '<div class="card empty">ただいま注文できる軽食がありません</div>') +
+    menuCards(list) +
     `<button class="btn sub" onclick="load()">更新</button>`;
 
   const { n, tk } = totals();
   bar.innerHTML = `<div class="bar"><div class="in"><div class="sum">${n ? `${n}点　<b>ドリチケ${tk}枚</b>` : '品目を選んでください'}</div>
     <button class="btn" ${n && !S.busy && !S.err ? '' : 'disabled'} onclick="confirmSubmit()">注文する</button></div></div>`;
+}
+/** 軽食とドリンクを別の枠で出す。並び順は onSale() のまま（bump は番号で指すので、番号を保つ） */
+function menuCards(list) {
+  const row = (x, i) => {
+    const c = S.qty[x.base] || 0, tk = ticketOf(x.info), img = S.imgs[x.base];
+    return `<div class="it">
+      <div class="ph">${img ? `<img src="${esc(img)}" alt="">` : esc(Array.from(x.base)[0] || '')}</div>
+      <div class="nm">${esc(x.base)}${tk ? `<div class="tk">ドリチケ${tk}枚</div>` : ''}</div>
+      <div class="qty"><button onclick="bump(${i},-1)" ${c ? '' : 'disabled'}>−</button><span>${c}</span><button onclick="bump(${i},1)">＋</button></div>
+    </div>`;
+  };
+  const pick = f => list.map((x, i) => (f(x) ? row(x, i) : '')).join('');
+  const food = pick(x => !x.drink), drink = pick(x => x.drink);
+  if (!food && !drink) return '<div class="card empty">ただいま注文できるものがありません</div>';
+  // 片方しか無いときは見出しを出さない（1枠だけなら何の一覧か明らかなため）
+  const two = !!food && !!drink;
+  return (food ? `<div class="card">${two ? '<div class="sec">軽食</div>' : ''}${food}</div>` : '') +
+    (drink ? `<div class="card">${two ? '<div class="sec">ドリンク</div>' : ''}${drink}</div>` : '');
 }
 function bump(i, d) {
   const x = (S.menu || [])[i]; if (!x) return;

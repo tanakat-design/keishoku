@@ -74,7 +74,7 @@ const Logger = { last: '', log(m) { Logger.last = String(m); } };
 const ctx = { Utilities, SpreadsheetApp, PropertiesService, LockService, UrlFetchApp, MailApp, ScriptApp, ContentService, HtmlService, Logger, console, Date, Math, JSON, String, Number, Object, Array, isNaN, parseInt, parseFloat };
 const vm = require('vm');
 vm.createContext(ctx);
-vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify, markReceived, markSoldOut, cancelSoldOut, submitClose, hm_ };', ctx);
+vm.runInContext(src + '\nthis.__x = { placeOrder, getOrder, setOrder, normItems_, inHours_, recvAt_, bizDate_, tables_, onSale_, limitCheck_, adminSaveTable, adminOrderOpen, adminOrderToken, adminSetTables, adminPreviewTables, parseTableSpec_, parseTableRows_, getOrderMenu, openOrders_, SH, HEAD, ORD, rnd_, addDay_, hm2_, validDT_, adminSave, adminTables, getTournaments, staffLogin, notifyPush_, sendPending, stale_, popPrices_, getDayState, testNotify, markReceived, markSoldOut, cancelSoldOut, submitClose, hm_, drinks_, drinkList_, drinkOut_, markDrinkOut, adminDrinks, adminSaveDrinks };', ctx);
 const X = ctx.__x;
 
 /* ---- 下ごしらえ ---- */
@@ -206,6 +206,34 @@ const made2 = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-110', 9);
 ok('個別に変えた席数は残る', made2.filter(t => t.table === '105')[0].seats === 6);
 const made3 = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-103', 9);
 ok('書かなかった卓は消える', made3.length === 3 && !made3.some(t => t.table === '110'));
+
+console.log('--- フロア（スタッフ画面の担当ボタンのまとまり） ---');
+const PR = X.parseTableRows_;
+const NL = String.fromCharCode(10);
+const fl = s => PR(s).map(x => x.table + '/' + x.floor).join(' ');
+ok('行の頭のフロア名を読む', fl('B2: 101,102') === '101/B2 102/B2', fl('B2: 101,102'));
+ok('次のフロア名までが同じフロア', fl('B2: 101' + NL + '102' + NL + '6F: 601') === '101/B2 102/B2 601/6F', fl('B2: 101' + NL + '102' + NL + '6F: 601'));
+ok('フロア名だけの行でもよい', fl('B2:' + NL + '101,102') === '101/B2 102/B2', fl('B2:' + NL + '101,102'));
+ok('フロア名を書かなければ空', fl('101,102') === '101/ 102/');
+ok('全角のコロンも読む', fl('Ｂ２：１０１') === '101/B2', fl('Ｂ２：１０１'));
+ok('フロアを書く前の行はフロアなし', fl('101' + NL + '6F: 601') === '101/ 601/6F', fl('101' + NL + '6F: 601'));
+ok('卓番号だけを並べる関数は変わらない', JSON.stringify(PS('B2: 101,102' + NL + '6F: 601')) === '["101","102","601"]', JSON.stringify(PS('B2: 101,102' + NL + '6F: 601')));
+// 実際のフロアマップ（SPADIE OSAKA B2=35卓・6F=21卓）
+const SPEC = 'B2: 100-102, 201-212, 301-314, 401-406' + NL + '6F: 600-620';
+const sp = PR(SPEC);
+ok('B2が35卓', sp.filter(x => x.floor === 'B2').length === 35, String(sp.filter(x => x.floor === 'B2').length));
+ok('6Fが21卓', sp.filter(x => x.floor === '6F').length === 21, String(sp.filter(x => x.floor === '6F').length));
+ok('合わせて56卓', sp.length === 56, String(sp.length));
+const madeF = X.adminSetTables(PROPS.ADMIN_PIN, 'T1', SPEC, 9);
+ok('フロアを保存する', madeF.length === 56 && madeF[0].floor === 'B2' && madeF[55].floor === '6F' && madeF[55].table === '620', madeF.length + '卓 ' + madeF[0].floor + '/' + madeF[55].floor);
+X.adminSaveTable(PROPS.ADMIN_PIN, 'T1', '620', 8, '有効', '');
+ok('席数だけ変えてもフロアは消えない', X.tables_('T1').filter(t => t.table === '620')[0].floor === '6F', X.tables_('T1').filter(t => t.table === '620')[0].floor);
+const dsF = X.getDayState('T1', '1234', today);
+ok('getDayState がフロアを返す', dsF.tableFloors['100'] === 'B2' && dsF.tableFloors['620'] === '6F', JSON.stringify(dsF.tableFloors['100']) + '/' + JSON.stringify(dsF.tableFloors['620']));
+ok('getDayState の卓一覧は56', dsF.tables.length === 56, String(dsF.tables.length));
+X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '101-103', 9);
+const dsN = X.getDayState('T1', '1234', today);
+ok('フロアを書かなければ空で返る', Object.keys(dsN.tableFloors).length === 0, JSON.stringify(dsN.tableFloors));
 
 console.log('--- getOrderMenu ---');
 const mn = X.getOrderMenu('T1', after);
@@ -455,6 +483,70 @@ console.log('[スタッフ画面に返す卓の一覧]');
   ok('有効な卓だけ返る', d.tables.indexOf('202') < 0 && d.tables.indexOf('201') >= 0, JSON.stringify(d.tables));
   ok('数字でない卓も返る', d.tables.indexOf('VIP') >= 0, JSON.stringify(d.tables));
   ok('件数が合う', d.tables.length === 5, JSON.stringify(d.tables));
+})();
+
+(function () {
+  console.log('\n[ドリンク]');
+  const NL = String.fromCharCode(10);
+  X.adminSetTables(PROPS.ADMIN_PIN, 'T1', '3', 9);   // この節は3番卓を使う
+  DB[X.SH.ORDER].length = 0; DB[X.SH.NOTIFY].length = 0;
+  DB[X.SH.LOG].length = 0; DB[X.SH.CLOSE].length = 0;   // 前の節の在庫切れを戻して、軽食をまた頑める状態にする
+  const TK = X.adminTables(PROPS.ADMIN_PIN, 'T1').orderToken;
+
+  const list = X.adminSaveDrinks(PROPS.ADMIN_PIN, 'コーラ 1' + NL + 'ウーロン茶 1' + NL + 'ハイボール 2' + NL + '#ホットコーヒー' + NL + 'ジンジャーエール');
+  ok('一括で5件入る', list.length === 5, JSON.stringify(list.map(d => d.name)));
+  ok('枚数を読む', list[0].name === 'コーラ' && list[0].price === 1 && list[2].price === 2, JSON.stringify(list[2]));
+  ok('枚数を書かなければ空', list[4].name === 'ジンジャーエール' && list[4].price === '', JSON.stringify(list[4]));
+  ok('# の行は無効', list[3].name === 'ホットコーヒー' && list[3].active === false, JSON.stringify(list[3]));
+  ok('書いた順が表示順', list.map(d => d.order).join(',') === '1,2,3,4,5', list.map(d => d.order).join(','));
+  ok('名前に空白があっても読める', X.adminSaveDrinks(PROPS.ADMIN_PIN, 'カフェ オレ 2')[0].name === 'カフェ オレ', JSON.stringify(X.drinks_()[0]));
+  X.adminSaveDrinks(PROPS.ADMIN_PIN, 'コーラ 1' + NL + 'ウーロン茶 1' + NL + 'ハイボール 2' + NL + '#ホットコーヒー');
+  ok('書かなかった品目は消える', !X.drinks_().some(d => d.name === 'ジンジャーエール'), JSON.stringify(X.drinks_().map(d => d.name)));
+  throws('管理者PINが要る', () => X.adminSaveDrinks('0000', 'コーラ'), /PIN|権限|管理/);
+
+  const dl = X.drinkList_('T1', today);
+  ok('注文に出るのは有効なものだけ', dl.length === 3 && !dl.some(d => d.name === 'ホットコーヒー'), JSON.stringify(dl.map(d => d.name)));
+  ok('はじめは品切れでない', dl.every(d => d.soldOut === false));
+
+  const mn = X.getOrderMenu('T1', TK);
+  ok('注文画面にドリンクが出る', Array.isArray(mn.drinks) && mn.drinks.length === 3, JSON.stringify(mn.drinks));
+
+  const o1 = X.placeOrder('T1', TK, '3', '1', [{ name: 'コーラ', qty: 2 }], 'dreq-1');
+  ok('ドリンクを注文できる', !!o1.id, JSON.stringify(o1));
+  const row = DB[X.SH.ORDER].filter(r => r[0] === o1.id)[0];
+  ok('注文シートに品目が入る', row[7] === 'コーラ' && row[8] === 2, JSON.stringify([row[7], row[8]]));
+  ok('ドリチケ枚数が入る（軽食と同じく文字で）', row[9] === '1', JSON.stringify(row[9]));
+  ok('通知が積まれる', DB[X.SH.NOTIFY].some(r => String(r[2]).indexOf('コーラ') >= 0), JSON.stringify(DB[X.SH.NOTIFY].map(r => r[2])));
+  ok('軽食と混ぜて頼める', !!X.placeOrder('T1', TK, '3', '2', [{ name: 'コーラ', qty: 1 }, { name: 'おにぎり', qty: 1 }], 'dreq-2').id);
+  throws('一覧に無いドリンクは頼めない', () => X.placeOrder('T1', TK, '3', '3', [{ name: 'ビール', qty: 1 }], 'dreq-3'), /注文できません/);
+
+  const after = X.markDrinkOut('T1', '1234', today, 'コーラ', true, 'スタッフA');
+  ok('品切れにできる', after.filter(d => d.name === 'コーラ')[0].soldOut === true, JSON.stringify(after));
+  ok('他のドリンクは残る', after.filter(d => d.name === 'ウーロン茶')[0].soldOut === false);
+  throws('品切れは頼めない', () => X.placeOrder('T1', TK, '3', '4', [{ name: 'コーラ', qty: 1 }], 'dreq-4'), /注文できません/);
+  ok('品切れでも一覧には出る（灰色にするため）', X.getOrderMenu('T1', TK).drinks.some(d => d.name === 'コーラ' && d.soldOut));
+  ok('別の日は品切れでない', X.drinkList_('T1', X.addDay_(today, 1)).every(d => !d.soldOut));
+  ok('別のイベントは品切れでない', X.drinkList_('T2', today).every(d => !d.soldOut));
+
+  const back = X.markDrinkOut('T1', '1234', today, 'コーラ', false, 'スタッフA');
+  ok('戻せる', back.filter(d => d.name === 'コーラ')[0].soldOut === false, JSON.stringify(back));
+  ok('戻すと行が消える', DB[X.SH.DOUT].length === 0, JSON.stringify(DB[X.SH.DOUT]));
+  ok('戻すとまた頼める', !!X.placeOrder('T1', TK, '3', '5', [{ name: 'コーラ', qty: 1 }], 'dreq-5').id);
+  X.markDrinkOut('T1', '1234', today, 'コーラ', true, 'スタッフA');
+  X.markDrinkOut('T1', '1234', today, 'コーラ', true, 'スタッフB');
+  ok('二度押しても1行だけ', DB[X.SH.DOUT].length === 1, JSON.stringify(DB[X.SH.DOUT]));
+  X.markDrinkOut('T1', '1234', today, 'コーラ', false, 'スタッフA');
+  throws('一覧に無いものは品切れにできない', () => X.markDrinkOut('T1', '1234', today, 'ビール', true, 'ス'), /一覧にありません/);
+  throws('無効なものも品切れにできない', () => X.markDrinkOut('T1', '1234', today, 'ホットコーヒー', true, 'ス'), /一覧にありません/);
+  throws('スタッフPINが要る', () => X.markDrinkOut('T1', '0000', today, 'コーラ', true, 'ス'), /PIN/);
+
+  const ds = X.getDayState('T1', '1234', today);
+  ok('スタッフ画面にもドリンクが届く', Array.isArray(ds.drinks) && ds.drinks.length === 3, JSON.stringify(ds.drinks));
+
+  X.adminSaveDrinks(PROPS.ADMIN_PIN, '');
+  ok('空にすると一覧が消える', X.drinks_().length === 0);
+  ok('ドリンクが無くても軽食は頼める', !!X.placeOrder('T1', TK, '3', '6', [{ name: 'おにぎり', qty: 1 }], 'dreq-6').id);
+  ok('ドリンクが無くても注文画面は開く', Array.isArray(X.getOrderMenu('T1', TK).drinks) && X.getOrderMenu('T1', TK).drinks.length === 0);
 })();
 
 if (fail) { console.log('\n[通知待ちシートの中身]'); console.log(JSON.stringify(DB[X.SH.NOTIFY])); }
