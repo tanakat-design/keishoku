@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="軽食アプリの管理者が、イベントの最中と終わったあとにやること。">
+<meta name="description" content="軽食在庫管理アプリの管理者用の手引き。やりたいことから引く。実際の画面の写し付き。">
 <style>
 /* GitHub Pages で単体で開くときの土台。Artifact 側の既定と同じにしてある */
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -15,8 +15,8 @@ img{max-width:100%}
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
 <style>
-/* 現場で判断するときに引く前提。やりたいことから引けるように表を使い、
-   理由は畳んでおく。色は画面と同じ意味に揃える（黄＝注意・赤＝壊れる・緑＝済んだ） */
+/* 現場で立ったまま読む前提。字を大きく、1画面に1つのことだけ置く。
+   色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ） */
 :root{
   --bg:#f7f6f3; --surface:#ffffff; --fg:#1c1b19; --muted:#6b6862; --line:#e2dfd8;
   --accent:#1558c0; --accent-weak:#e8f0fd;
@@ -43,30 +43,60 @@ img{max-width:100%}
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.8;margin:0;font-size:16px;-webkit-text-size-adjust:100%}
-.wrap{max-width:820px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 72px}
-nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.8;margin:0;font-size:17px;-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 72px}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
 nav ol{display:flex;flex-wrap:wrap;gap:6px 14px;list-style:none;margin:0;padding:0;font-size:13.5px}
 nav a{color:var(--muted);text-decoration:none;font-weight:500;white-space:nowrap}
 nav a:hover,nav a:focus-visible{color:var(--accent)}
-header{padding-block:36px 8px}
-h1{font-family:var(--display);font-weight:900;font-size:clamp(27px,6.5vw,38px);line-height:1.25;margin:0 0 10px;text-wrap:balance}
-.lede{color:var(--muted);font-size:16px;margin:0;max-width:36em}
-h2{font-family:var(--display);font-weight:800;font-size:clamp(20px,4.6vw,26px);line-height:1.35;margin:48px 0 8px;text-wrap:balance;scroll-margin-top:66px}
-h2 .no{display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--accent);color:#fff;font-size:.68em;margin-right:.5em;vertical-align:.1em}
-h3{font-family:var(--display);font-weight:700;font-size:17.5px;margin:26px 0 8px}
+header{padding-block:32px 10px}
+h1{font-family:var(--display);font-weight:900;font-size:clamp(28px,7vw,40px);line-height:1.25;margin:0 0 10px;text-wrap:balance}
+.lede{color:var(--muted);font-size:17px;margin:0}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(21px,5vw,27px);line-height:1.35;margin:48px 0 10px;text-wrap:balance;scroll-margin-top:62px}
+h2 .no{display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--accent);color:#fff;font-size:.7em;margin-right:.5em;vertical-align:.1em}
+h3{font-family:var(--display);font-weight:700;font-size:18px;margin:26px 0 8px}
 p{margin:0 0 14px}
 a{color:var(--accent)}
 strong{font-weight:700}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;background:var(--accent-weak);padding:1px 6px;border-radius:4px}
 
-.steps{list-style:none;counter-reset:s;margin:0 0 16px;padding:0;display:grid;gap:12px}
-.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 18px 15px 56px;position:relative;min-width:0}
-.steps li::before{content:counter(s);position:absolute;left:15px;top:13px;width:27px;height:27px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--display);font-weight:900;font-size:14.5px;display:flex;align-items:center;justify-content:center}
-.steps b{font-family:var(--display);font-size:17px}
-.steps .where{display:inline-block;background:var(--accent-weak);color:var(--accent);font-size:12.5px;font-weight:700;border-radius:99px;padding:2px 10px;margin-left:8px;vertical-align:2px}
+/* 3つだけ */
+.three{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:0 0 8px;padding:0;list-style:none}
+.three li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+.three svg{display:block;margin:0 auto 10px}
+.three b{font-family:var(--display);font-size:19px;display:block;margin-bottom:4px}
+.three span{color:var(--muted);font-size:15px}
 
-.note{border-radius:12px;padding:15px 18px;margin:0 0 16px;font-size:15.5px;border:1px solid}
+/* 手順 */
+.steps{list-style:none;counter-reset:s;margin:0 0 16px;padding:0;display:grid;gap:12px}
+.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px 16px 58px;position:relative;min-width:0}
+.steps li::before{content:counter(s);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--fg);color:var(--bg);font-family:var(--display);font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center}
+.steps b{font-family:var(--display);font-size:18px}
+
+/* 1日の流れ */
+.flow{list-style:none;margin:0 0 16px;padding:0;border-left:2px solid var(--line);margin-left:8px}
+.flow li{position:relative;padding:0 0 22px 22px;min-width:0}
+.flow li::before{content:"";position:absolute;left:-7px;top:10px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.flow .when{font-family:var(--display);font-weight:700;font-size:16px;display:block}
+.flow .what{color:var(--muted);font-size:15.5px}
+.flow li:last-child{padding-bottom:0}
+
+/* 守ること */
+.rules{counter-reset:r;list-style:none;margin:0 0 16px;padding:0;display:grid;gap:12px}
+.rules li{counter-increment:r;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.rules .head{font-family:var(--display);font-weight:800;font-size:17.5px;display:block;margin-bottom:4px}
+.rules .head::before{content:counter(r);display:inline-flex;align-items:center;justify-content:center;width:1.5em;height:1.5em;background:var(--fg);color:var(--bg);font-size:12px;border-radius:50%;margin-right:9px;vertical-align:2px}
+.rules .why{color:var(--muted);font-size:15.5px}
+
+/* 表 */
+.tw{overflow-x:auto;margin-bottom:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:420px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+th{font-family:var(--display);font-weight:700;background:var(--accent-weak);color:var(--fg);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+
+/* 注意 */
+.note{border-radius:12px;padding:16px 18px;margin:0 0 16px;font-size:16px;border:1px solid}
 .note b{font-family:var(--display)}
 .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
 .note.warn b{color:var(--warn)}
@@ -75,262 +105,323 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;bac
 .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
 .note.ok b{color:var(--ok)}
 
-.tw{overflow-x:auto;margin-bottom:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
-table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:420px}
-th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
-th{font-family:var(--display);font-weight:700;background:var(--accent-weak);color:var(--fg);white-space:nowrap}
-tr:last-child td{border-bottom:0}
-
+/* 図 */
 figure{margin:0 0 18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 16px 12px}
 figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--fg)}
 figcaption{color:var(--muted);font-size:14.5px;margin-top:10px;text-align:center}
+/* 実際の画面の写し。スマホ幅で撮ったものをそのまま出すので、大きくしすぎない */
+figure.shot img{display:block;margin:0 auto;width:100%;max-width:330px;height:auto;border:1px solid var(--line);border-radius:12px}
 
-.faqgroup{font-family:var(--display);font-weight:700;font-size:14.5px;color:var(--muted);letter-spacing:.06em;margin:26px 0 10px}
+/* 画面の見本 */
+.demo{font-family:var(--display);font-weight:700;border-radius:8px;padding:11px 14px;margin:0 0 8px;font-size:15.5px}
+.demo.y{background:#f9ab00;color:#202124}
+.demo.r{background:#b3261e;color:#fff}
+
+/* 困ったら */
+.faqgroup{font-family:var(--display);font-weight:700;font-size:15px;color:var(--muted);letter-spacing:.06em;margin:26px 0 10px}
 details{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden}
 details[open]{border-color:var(--accent)}
-summary{cursor:pointer;padding:15px 44px 15px 18px;font-family:var(--display);font-weight:700;font-size:16px;list-style:none;line-height:1.6;position:relative}
+summary{cursor:pointer;padding:15px 44px 15px 18px;font-family:var(--display);font-weight:700;font-size:16.5px;list-style:none;line-height:1.6;position:relative}
 summary::-webkit-details-marker{display:none}
 summary::after{content:"＋";position:absolute;right:18px;top:15px;color:var(--accent)}
 details[open] summary::after{content:"－"}
-details>div{padding:0 18px 16px;border-top:1px solid var(--line);padding-top:14px;font-size:15.5px}
+details>div{padding:0 18px 16px;border-top:1px solid var(--line);padding-top:14px;font-size:16px}
 details p:last-child,details ul:last-child{margin-bottom:0}
 details ul{margin:0 0 12px;padding-left:1.2em}
+details li{margin-bottom:4px}
 
-footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14.5px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 管理者用で足すぶん */
+.where{background:var(--accent-weak);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px}
+.where b{font-family:var(--display);display:block;margin-bottom:4px}
+.where p:last-child{margin-bottom:0}
+.lead{font-size:17.5px;margin:0 0 16px}
+h2 .no{background:var(--fg)}
 </style>
 
 <div class="wrap">
 
 <nav>
   <ol>
-    <li><a href="#map">全体像</a></li>
-    <li><a href="#during">イベントの最中</a></li>
-    <li><a href="#after">終わったあと</a></li>
-    <li><a href="#traps">落とし穴</a></li>
+    <li><a href="#open">管理画面を開く</a></li>
+    <li><a href="#new">イベントを作る</a></li>
+    <li><a href="#csv">軽食を入れる</a></li>
+    <li><a href="#edit">手で直す</a></li>
+    <li><a href="#pay">支払いだけ直す</a></li>
+    <li><a href="#tables">テーブル</a></li>
+    <li><a href="#drinks">ドリンク</a></li>
+    <li><a href="#order">注文を始める</a></li>
+    <li><a href="#pop">モニターに映す</a></li>
+    <li><a href="#end">終わったとき</a></li>
     <li><a href="#faq">困ったら</a></li>
   </ol>
 </nav>
 
 <header>
   <h1>管理者用<br>かんたん手引き</h1>
-  <p class="lede">イベントの最中と、終わったあとにやること。アルバイトが現場で触る操作は <a href="manual-staff.html">アルバイト用</a> にある。</p>
+  <p class="lede">やりたいことから引く。上の並びから選んでも、順に読んでもいい。画像はすべて実際の画面（中身はテスト用の作り物）。</p>
 </header>
 
-<h2 id="map"><span class="no">1</span>何がどこにあるか</h2>
-
-<figure>
-  <svg viewBox="0 0 420 392" role="img" aria-label="スタッフ画面・デジタルPOP・卓上注文・管理画面の4つがサーバーを通して1つのスプレッドシートを読み書きする関係図">
-    <defs>
-      <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
-      </marker>
-    </defs>
-
-    <rect x="4" y="6" width="97" height="62" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="52" y="30" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">スタッフ画面</text>
-    <text x="52" y="50" font-size="11.5" text-anchor="middle" fill="currentColor">PIN要る</text>
-
-    <rect x="109" y="6" width="97" height="62" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="157" y="30" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">デジタルPOP</text>
-    <text x="157" y="50" font-size="11.5" text-anchor="middle" fill="currentColor">お客様</text>
-
-    <rect x="214" y="6" width="97" height="62" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="262" y="30" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor">卓上注文</text>
-    <text x="262" y="50" font-size="11.5" text-anchor="middle" fill="currentColor">プレイヤー</text>
-
-    <rect x="319" y="6" width="97" height="62" rx="9" fill="#e8f0fd" stroke="#1558c0" stroke-width="2.5"/>
-    <text x="367" y="30" font-size="12.5" font-weight="700" text-anchor="middle" fill="#174ea6">管理画面</text>
-    <text x="367" y="50" font-size="11.5" text-anchor="middle" fill="#174ea6">あなた</text>
-
-    <line x1="52" y1="72" x2="170" y2="128" stroke="currentColor" stroke-width="1.8" marker-end="url(#a1)"/>
-    <line x1="157" y1="72" x2="195" y2="128" stroke="currentColor" stroke-width="1.8" marker-end="url(#a1)"/>
-    <line x1="262" y1="72" x2="225" y2="128" stroke="currentColor" stroke-width="1.8" marker-end="url(#a1)"/>
-    <line x1="367" y1="72" x2="250" y2="128" stroke="#1558c0" stroke-width="2.2" marker-end="url(#a1)"/>
-
-    <rect x="110" y="134" width="200" height="58" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="210" y="160" font-size="14" font-weight="700" text-anchor="middle" fill="currentColor">サーバー</text>
-    <text x="210" y="180" font-size="12" text-anchor="middle" fill="currentColor">Apps Script（GAS）</text>
-
-    <line x1="210" y1="196" x2="210" y2="222" stroke="currentColor" stroke-width="2" marker-end="url(#a1)"/>
-    <text x="222" y="214" font-size="11.5" fill="currentColor">読み書き</text>
-
-    <rect x="18" y="228" width="384" height="156" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="210" y="254" font-size="14" font-weight="700" text-anchor="middle" fill="currentColor">スプレッドシート</text>
-    <text x="210" y="280" font-size="12.5" text-anchor="middle" fill="currentColor">イベント ／ 在庫設定 ／ POP設定</text>
-    <text x="210" y="302" font-size="12.5" text-anchor="middle" fill="currentColor">在庫切れログ ／ 日次残数 ／ 受取記録</text>
-    <text x="210" y="324" font-size="12.5" text-anchor="middle" fill="currentColor">卓 ／ 注文 ／ 残数_イベント名</text>
-    <text x="210" y="356" font-size="12" font-weight="700" text-anchor="middle" fill="currentColor">ここが元のデータ</text>
-    <text x="210" y="374" font-size="11.5" text-anchor="middle" fill="currentColor">ふだん直接いじる必要はない</text>
-  </svg>
-  <figcaption>見る画面が3つと、あなたが使う管理画面。どれも同じサーバーを通して、1つのスプレッドシートを読み書きする。</figcaption>
-</figure>
-
-<p>あなたが触るのは<strong>管理画面</strong>だけでいい。スタッフ画面の「管理者メニュー」から入る。</p>
-
-<div class="note warn"><b>PINは2種類ある。</b><strong>スタッフPIN</strong>はイベントごとに違い、アルバイトが使う。<strong>管理者PIN</strong>は全体で1つで、あなたが使う。逆に入れても通らない。スタッフPINは管理画面のイベント一覧に出ている。</div>
-
-<h2 id="during"><span class="no">2</span>イベントの最中</h2>
-
-<div class="tw">
-<table>
-  <tr><th>やりたいこと</th><th>どうする</th></tr>
-  <tr><td><strong>注文を今すぐ止める</strong></td><td>イベント一覧 → 注文設定 → <strong>受付を停止する</strong>。すぐ止まる。再開も同じ場所。QRは刷り直さなくていい</td></tr>
-  <tr><td>在庫数が実際と違った</td><td>イベントを編集して直す。<strong>品目名は変えない</strong>（下の落とし穴を見る）</td></tr>
-  <tr><td>品目を足す</td><td>イベントを編集 → 受取ブロックの「＋ 品目を追加」。写真とドリチケはPOP設定で別に入れる</td></tr>
-  <tr><td>賞味期限が入っていない品目がある</td><td>イベントを編集して受取ブロックの賞味期限を入れる。入っていないと、スタッフの画面に帯が出ない</td></tr>
-  <tr><td>卓を足す・減らす</td><td>注文設定 → テーブルの設定。<strong>書いた卓がそのままその イベントの卓になり、書かなかった卓は消える</strong></td></tr>
-  <tr><td>QRが悪用された</td><td>注文設定 → <strong>QRを作り直す</strong>。刷ってある古いQRが一斉に使えなくなる（刷り直しが要る）</td></tr>
-  <tr><td>スタッフがログインできない</td><td>イベントが「非表示」になっていないか見る。一覧のスイッチで「表示」にする</td></tr>
-  <tr><td>POPをモニターに出す</td><td>イベント一覧 → POP設定にURLが出る。<strong>現在販売中のみ／全品目</strong>と<strong>横／縦</strong>を選べる。モニターのブラウザで開いて全画面にする</td></tr>
-</table>
+<div class="note ok">
+  <b>いちばん大事なこと</b>
+  <p style="margin:6px 0 0">どの画面も、直したあとに<strong>「保存」か「この内容にする」を押さないと何も変わらない</strong>。取り込んだだけ、打ち込んだだけでは保存されていない。</p>
 </div>
 
-<div class="note warn"><b>未完了の注文が50件を超えると、受付が自動で止まる。</b>さばききれていない合図。人を増やすか、落ち着くまで止めておく。</div>
+<p>アルバイトがイベント中に触る操作は <a href="manual-staff.html">アルバイト用の手引き</a> にある。配るのはそちら。</p>
 
-<div class="note ok"><b>通知は画面を開いている間しか鳴らない。</b>外部通知（Discord・LINE・メール）は入れていない。<strong>注文担当の端末を1台決めて開きっぱなしにする</strong>運用が前提。フロアが分かれているなら、各端末で注文タブの「担当する卓」を押させる。10分を過ぎた注文は担当外でも鳴る。</div>
-
-<h2 id="after"><span class="no">3</span>終わったあと</h2>
-
-<figure>
-  <svg viewBox="0 0 420 288" role="img" aria-label="受付を停止、イベントを非表示、注文シートを退避、集計を見る、の順に上から下へ進む片付けの流れ">
-    <defs>
-      <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
-      </marker>
-    </defs>
-    <rect x="6" y="6" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="36" font-size="15" font-weight="700" fill="currentColor">1　受付を停止する</text>
-    <line x1="210" y1="58" x2="210" y2="72" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
-
-    <rect x="6" y="76" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="106" font-size="15" font-weight="700" fill="currentColor">2　イベントを「非表示」にする</text>
-    <line x1="210" y1="128" x2="210" y2="142" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
-
-    <rect x="6" y="146" width="408" height="48" rx="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="176" font-size="15" font-weight="700" fill="currentColor">3　「注文」シートの行を退避する</text>
-    <line x1="210" y1="198" x2="210" y2="212" stroke="currentColor" stroke-width="2" marker-end="url(#a2)"/>
-
-    <rect x="6" y="216" width="408" height="48" rx="9" fill="#e8f0fd" stroke="#1558c0" stroke-width="2"/>
-    <text x="30" y="246" font-size="15" font-weight="700" fill="#174ea6">4　集計を見て、次の発注を決める</text>
-  </svg>
-  <figcaption>2を忘れると、次のイベントでスタッフが選び間違える。</figcaption>
-</figure>
-
+<h2 id="open"><span class="no">1</span>管理画面を開きたいときは</h2>
 <ol class="steps">
-  <li><b>受付を停止する。</b><span class="where">注文設定</span></li>
-  <li><b>イベントを「非表示」にする。</b><span class="where">イベント一覧のスイッチ</span>
-    <p style="margin:8px 0 0">スタッフのログイン画面からもPOPの一覧からも消える。終わったイベントを残しておくと、次のイベントで選び間違える。</p>
-  </li>
-  <li><b>「注文」シートの行を別シートへ移す。</b>
-    <p style="margin:8px 0 0">行が増えると取得が遅くなる。イベント1回ぶんずつ退避する。</p>
-  </li>
-  <li><b>集計を見る。</b>
-    <p style="margin:8px 0 0">スプレッドシートに<strong>「残数_イベント名」</strong>のシートが自動でできている。品目ごとの <strong>期限切れ率</strong> が出て、50%を超えた行は薄い赤になる。<strong>これが次の発注数の根拠</strong>。</p>
-  </li>
+  <li><b>アプリを開く</b><br>スタッフと同じURLを開く。</li>
+  <li><b>いちばん下の「管理者メニュー」を押す</b><br>ログイン画面の下にある小さな文字。</li>
+  <li><b>管理者PINを入れる</b><br>スタッフPINとは別の番号。</li>
 </ol>
 
-<div class="note ok"><b>記録が抜けると、この集計が使えなくなる。</b>だからアルバイトには「品切れはその場で押す」を徹底してもらう。前回のイベントでは、品切れが10品目あって記録は0件だった。</div>
+<div class="where">
+  <b>管理者PINが分からないときは</b>
+  <p>この手引きは誰でも見られる公開ページなので、PINは書いていない。Apps Script の「JOPT 軽食在庫管理アプリ」を開き、<strong>プロジェクトの設定 → スクリプト プロパティ → <code>ADMIN_PIN</code></strong> を見る。</p>
+  <p style="margin-top:8px">スプレッドシートのメニューにある「管理者PINを表示」は<strong>別のスクリプトの番号</strong>を見せるので合わない。そちらは見ない。</p>
+</div>
 
-<h2 id="traps"><span class="no">4</span>知らないとハマること</h2>
+<figure class="shot">
+  <img src="assets/manual/adm-list.jpg" alt="管理画面のイベント一覧。イベントごとにカードがあり、表示・非表示のチェック、編集・複製して新規作成・POP設定・注文設定のボタンが並んでいる" loading="lazy">
+  <figcaption>開くとこの一覧が出る。ここがすべての入口。</figcaption>
+</figure>
 
-<details>
-  <summary>イベントの途中でCSVを入れ直してはいけない</summary>
-  <div><p>CSVの取り込みは品目名を作り直す。記録は<strong>品目名で紐付いている</strong>ので、途中で入れ直すと、それまでの在庫切れログや期限切れ数が新しい品目と繋がらなくなる。</p>
-  <p>支払方法と支払金額だけを入れたいときは、取り込み欄の下にある<strong>「CSVから支払いだけ取り込む」</strong>を使う。品目・在庫数・受取時間・賞味期限は触らない。</p></div>
-</details>
+<div class="note warn">
+  <b>「表示」のチェックの意味</b>
+  <p style="margin:6px 0 0">チェックが付いたイベントだけが、アルバイトのログイン画面に出る。終わったイベントと準備中のイベントは<strong>必ず外す</strong>。外し忘れると、アルバイトが間違ったイベントを選ぶ。</p>
+</div>
 
-<details>
-  <summary>品目名は変えない</summary>
-  <div><p>同じ理由。一度イベントが始まったら、品目名の文字は変えない。在庫数や賞味期限は変えていい。</p></div>
-</details>
+<h2 id="new"><span class="no">2</span>新しいイベントを作りたいときは</h2>
+<p>ゼロから作るより、<strong>前回のイベントを「複製して新規作成」するほうが速い</strong>。店舗や品目の形がそのまま残る。</p>
+<ol class="steps">
+  <li><b>一覧で前回のイベントの「複製して新規作成」を押す</b><br>新しく作るなら、いちばん上の「＋ 新しいイベントを作成」。</li>
+  <li><b>イベント名を直す</b><br>名前にブランド名を入れると、POPのデザインが自動で切り替わる。</li>
+  <li><b>スタッフPINを決める</b><br>数字4〜8桁。<strong>アルバイトに伝えるのはこの番号</strong>。管理者PINは渡さない。</li>
+  <li><b>「表示する」にチェック</b><br>準備が終わるまでは外しておいてもいい。</li>
+</ol>
 
-<details>
-  <summary>管理者PINはスプレッドシートのメニューに出るものとは違う</summary>
-  <div><p>Apps Script のプロジェクトが2つあり、設定がそれぞれ別に入っている。シートのメニュー「軽食アプリ → 管理者PINを表示」が見せるのは<strong>別のほう</strong>で、管理画面が照合するPINとは一致しない。</p>
-  <p>正しいほうは、Apps Script プロジェクト「JOPT 軽食在庫管理アプリ」の プロジェクトの設定 → スクリプト プロパティ にある。</p></div>
-</details>
+<figure class="shot">
+  <img src="assets/manual/adm-edit.jpg" alt="イベント編集画面の上部。イベント名の入力欄、スタッフPINの入力欄、表示するのチェックボックスが並んでいる" loading="lazy">
+  <figcaption>この3つを決める。あとは下に続く開催日の設定。</figcaption>
+</figure>
 
-<details>
-  <summary>注文は在庫を減らさない</summary>
-  <div><p>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおりスタッフが押す。<strong>注文は受付であって、渡せる保証ではない。</strong>品切れならスタッフが取り消す。</p>
-  <p>注文の制限：1回あたり合計5個・5種類、同じ席は60秒に1件、同じ卓は10分に5件。</p></div>
-</details>
+<h2 id="csv"><span class="no">3</span>軽食の中身を入れたいときは</h2>
+<p>運営シートの「軽食」タブから、全開催日ぶんをまとめて取り込める。手で打つ必要はない。</p>
+<ol class="steps">
+  <li><b>運営シートの「軽食」タブを CSV で書き出す</b><br>ファイル → ダウンロード → カンマ区切り形式。</li>
+  <li><b>イベントの「編集」を開く</b></li>
+  <li><b>「CSVファイルを選んで取り込む」で、いま落としたファイルを選ぶ</b></li>
+  <li><b>出てきた確認の数を見る</b><br>「◯日分・◯品目を読み取りました」と出る。<strong>日数と品目数がシートと合っているか必ず見る。</strong></li>
+  <li><b>いちばん下の青い「保存」を押す</b><br>ここを押すまでスプレッドシートには入らない。</li>
+</ol>
 
-<details>
-  <summary>期限切れ数が在庫数を超えることがある</summary>
-  <div><p>だいたいは、11時受取と17時受取の残りを合算して片方に入れている。集計の消費数がマイナスになる。アルバイトに「受取の時間帯ごとに分けて数える」と伝える。</p>
-  <p>本当に届いた数が設定と違っていた可能性もあるので、報告が来たら在庫設定を直す。</p></div>
-</details>
+<figure class="shot">
+  <img src="assets/manual/adm-csv.jpg" alt="CSV取り込みの欄。受取時間帯ごとに分けるのチェック、賞味期限の時間の入力欄、CSVファイルを選んで取り込むボタン、貼り付け用のテキスト欄が並んでいる" loading="lazy">
+  <figcaption>ファイルを選ぶか、シートをコピーして欄に貼り付ける。</figcaption>
+</figure>
 
-<details>
-  <summary>QRはイベントに1枚</summary>
-  <div><p>卓ごとに刷り分けない。全部の卓に同じものを置き、プレイヤーが読み取ってから卓番号と席番号を自分で選ぶ。</p>
-  <p>登録していない卓番号は選べないので、存在しない卓への誤配達は起きない。<strong>だから卓の登録はイベントごとに入れ直す。</strong></p></div>
-</details>
+<div class="note warn">
+  <b>確認の画面に「読み取れなかった値」が出たら</b>
+  <p style="margin:6px 0 0">そこだけ空で入る。よくあるのは<strong>品目名が空なのに数量だけ書いてある列</strong>。シート側を直してから取り込み直すほうが早い。</p>
+</div>
 
-<details>
-  <summary>押したデータはどこに入るのか</summary>
-  <div><p>スプレッドシート「JOPT 軽食在庫管理」。押した瞬間に入る。</p>
-  <ul>
-    <li><strong>在庫切れログ</strong>＝いつ何が切れたか</li>
-    <li><strong>日次残数</strong>＝在庫数・期限切れ数・消費数</li>
-    <li><strong>受取記録</strong>＝誰が何時に受け取ったか</li>
-    <li><strong>注文</strong>＝卓上注文の明細</li>
-  </ul>
-  <p>イベントごとの集計シートは、この日次残数から自動で作られる。</p></div>
-</details>
+<h2 id="edit"><span class="no">4</span>手で直したいときは</h2>
+<p>開催日の中に<strong>「受取のかたまり」</strong>が並んでいる。1つのかたまり＝1つの店舗の1回の受け取り。</p>
 
-<h2 id="faq"><span class="no">5</span>困ったら</h2>
+<figure class="shot">
+  <img src="assets/manual/adm-group.jpg" alt="開催日ごとの設定。店舗名、受取時間、賞味期限、受取方法、住所、電話、支払方法、支払金額、品目名と在庫数の入力欄が縦に並んでいる" loading="lazy">
+  <figcaption>1つのかたまりに、店舗・時間・期限・支払い・品目が入る。</figcaption>
+</figure>
 
-<div class="faqgroup">設定</div>
+<div class="tw"><table>
+<tr><th>欄</th><th>何に使われるか</th></tr>
+<tr><td>店舗</td><td>受取タブの見出し。期限切れの単位にもなる</td></tr>
+<tr><td>受取時間</td><td>この時刻までPOPに「◯:◯◯から販売」と出る</td></tr>
+<tr><td>賞味期限</td><td>この時刻の30分前から画面に黄色い帯、過ぎると赤い帯が出る</td></tr>
+<tr><td>受取方法・住所・電話</td><td>受取タブに出る。住所はGoogleマップのリンクになる</td></tr>
+<tr><td>支払方法・支払金額</td><td>受取タブに黄色い枠で出る。空なら「支払い無し」と出る</td></tr>
+<tr><td>品目名・在庫数</td><td>在庫切れ記録と期限切れ入力の対象</td></tr>
+</table></div>
 
-<details>
-  <summary>アルバイトが「イベントが出てこない」と言う</summary>
-  <div><p>そのイベントが「非表示」になっている。イベント一覧のスイッチを「表示」にする。</p></div>
-</details>
+<div class="note danger">
+  <b>品目名は変えない</b>
+  <p style="margin:6px 0 0">在庫切れのログは<strong>品目名で紐付いている</strong>。イベントの途中で名前を変えると、それまでの記録とつながらなくなり、集計が合わなくなる。</p>
+</div>
 
-<details>
-  <summary>POPに写真が出ない／ドリチケ枚数が出ない</summary>
-  <div><p>その品目に登録されていない。イベント一覧 → POP設定から入れる。<strong>「写真をまとめて選ぶ」</strong>で複数枚を一度に入れられる（ファイル名で品目に自動で割り当てる）。</p>
-  <p>写真は自動で4:3に切って縮めるので、大きい写真をそのまま選んでいい。</p></div>
-</details>
+<h2 id="pay"><span class="no">5</span>支払いだけ入れ直したいときは</h2>
+<p>イベントが始まったあとに金額が決まった、という場合に使う専用の入口。</p>
 
-<details>
-  <summary>注文設定で「受付時間外。注文は届きません」と出る</summary>
-  <div><p>受付時間の書き方が合っていないか、本当に時間外。深夜まで開く会場は <code>10:00-28:00</code> のように<strong>24時を超えて書く</strong>（28:00＝翌4時）。<code>11:00-23:00</code> だと0時すぎに全部弾かれる。</p>
-  <p>空にすれば制限なし。迷うなら空にして、止めたいときにボタンで止める。</p></div>
-</details>
+<figure class="shot">
+  <img src="assets/manual/adm-pay.jpg" alt="CSVから支払いだけ取り込むボタンと、その上の説明文" loading="lazy">
+  <figcaption>同じ編集画面の下のほうにある。</figcaption>
+</figure>
 
-<details>
-  <summary>設定が本当に入っているか外から確かめたい</summary>
-  <div><p>リポジトリに点検スクリプトがある。<code>node gas/check-live.js &lt;イベントID&gt;</code> を流すと、日付の取り違え・受取時間や店舗の空欄・賞味期限が受取時刻より前・写真やドリチケの未設定を拾う。PINは要らず、読むだけなので本番は変わらない。</p></div>
-</details>
+<div class="note warn">
+  <b>ふつうの取り込みを使ってはいけない</b>
+  <p style="margin:6px 0 0">イベントの途中でCSVを入れ直すと<strong>品目名が作り直されて、それまでの在庫切れログと切れる</strong>。だから支払いだけを写す入口が別にある。こちらは<strong>品目・在庫数・受取時間・賞味期限を触らない</strong>ので安全。</p>
+</div>
 
-<div class="faqgroup">画面</div>
+<h2 id="tables"><span class="no">6</span>テーブルを登録したいときは</h2>
+<p>卓上注文を使うなら、会場のテーブル番号を入れておく。登録していない卓はプレイヤーが選べないので、誤配達を防げる。</p>
+<ol class="steps">
+  <li><b>一覧で「注文設定」を押す</b></li>
+  <li><b>「テーブルの設定」の欄に番号を書く</b><br><code>101-110</code> のように範囲で書ける。カンマ・空白・改行で区切る。</li>
+  <li><b>フロアで分けたいときは、行の頭に書く</b><br>こう書くと、スタッフ画面の「担当する卓」のボタンが <strong>B2</strong> と <strong>6F</strong> の2つになる。</li>
+  <li><b>「確認」で数を見てから「この内容にする」</b></li>
+</ol>
 
-<details>
-  <summary>POPが固まった／更新されない</summary>
-  <div><p>30秒ごとに自動で取り直している。止まって見えるときは<strong>ページを再読み込み</strong>する。前回の表示が残っている間は「前回の表示のまま」と帯が出る。</p>
-  <p>長時間つけっぱなしでも重くならないように作ってあるが、丸一日つけたら一度リロードしておくと確実。</p></div>
-</details>
+<pre style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;font-size:15px;margin:0 0 16px"><code style="background:none;padding:0">B2: 100-102, 201-212, 301-314, 401-406
+6F: 600-620</code></pre>
 
-<details>
-  <summary>スタッフから「鈴が鳴らない」と言われた</summary>
-  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。ブラウザは最初のタップがあるまで音を出せない。どこか1回タップさせる。</p>
-  <p>画面を閉じていると鳴らない。注文担当の端末は開きっぱなしにする。</p></div>
-</details>
+<figure class="shot">
+  <img src="assets/manual/adm-tables.jpg" alt="テーブルの設定の欄。フロア名を頭に付けた卓番号が書かれ、席数の欄と確認ボタン、この内容にするボタンが並んでいる" loading="lazy">
+  <figcaption>フロア名を書かなければ、卓番号の百の位でまとまる。</figcaption>
+</figure>
 
-<details>
-  <summary>アプリを直したのに反映されない</summary>
-  <div><p>画面（<code>index.html</code>・<code>pop.html</code>・<code>order.html</code>）はGitHubにコミットすれば1〜2分で反映される。</p>
-  <p><strong>サーバー（<code>gas/Code.gs</code>）はコミットだけでは反映されない。</strong>Apps Script エディタに貼って保存し、<strong>「デプロイ → デプロイを管理 → 編集 → バージョン：新バージョン → デプロイ」</strong>まで必要。「新しいデプロイ」は使わない（URLが変わって画面と食い違う）。</p>
-  <p>シートの列を足したときは、デプロイのあとに <code>setup()</code> を1回実行する。</p></div>
-</details>
+<div class="note danger">
+  <b>書かなかった卓は消える</b>
+  <p style="margin:6px 0 0">この欄に書いたものが<strong>そのままそのイベントの卓になる</strong>。いま入っている卓を先に見てから書き直すこと。すでにある卓の席数はそのまま残る。</p>
+</div>
+
+<h2 id="drinks"><span class="no">7</span>ドリンクを決めたいときは</h2>
+<p>同じ「注文設定」の画面にある。<strong>ここだけは全イベント共通</strong>で、一度決めれば次のイベントでもそのまま出る。</p>
+<ol class="steps">
+  <li><b>1行に1つ書く</b><br>行の終わりの数字がドリチケ枚数になる（省略してもいい）。</li>
+  <li><b>一時的に隠したいものは頭に # を付ける</b><br>行は残るので、またすぐ戻せる。</li>
+  <li><b>「この内容にする」を押す</b></li>
+</ol>
+
+<figure class="shot">
+  <img src="assets/manual/adm-drinks.jpg" alt="ドリンクの設定の欄。コーラ1、ウーロン茶1、ハイボール2、#ホットコーヒーと書かれ、この内容にするボタンがある" loading="lazy">
+  <figcaption>書いた行がそのまま一覧になる。書かなかったものは消える。</figcaption>
+</figure>
+
+<div class="note warn">
+  <b>イベント中に切れたときは、ここを触らない</b>
+  <p style="margin:6px 0 0">この一覧は全イベント共通なので、直すとほかのイベントにも効く。<strong>その日だけ止めたいときは、スタッフ画面の「注文」タブのボタンで品切れにする</strong>。アルバイトが自分で押せる。</p>
+</div>
+
+<h2 id="order"><span class="no">8</span>卓上注文を始めたいときは</h2>
+<ol class="steps">
+  <li><b>「受付を開始する」を押す</b><br>押すと下にQRが出る。</li>
+  <li><b>受付時間を入れて「保存」</b><br><code>11:00-23:00</code> の形。深夜までなら <code>10:00-28:00</code>（28:00＝翌朝4時）。空にすれば時間の制限なし。</li>
+</ol>
+
+<figure class="shot">
+  <img src="assets/manual/adm-order.jpg" alt="注文設定の上部。受付を停止するボタン、いまは受付中の表示、受付時間の入力欄と保存ボタンが並んでいる" loading="lazy">
+  <figcaption>「いまは受付中」と出ていれば、プレイヤーから注文できる。</figcaption>
+</figure>
+
+<div class="note danger">
+  <b>受付時間の書き間違いに注意</b>
+  <p style="margin:6px 0 0"><code>11:00-23:00</code> と書くと<strong>0時すぎは受け付けない</strong>。深夜まで営業する会場で 23:00 と書くと、そこから先の注文が静かに全部弾かれる。<strong>「受付中」と出ていても、受付時間外なら届かない</strong>ので、画面の表示をそのまま読むこと。</p>
+</div>
+
+<figure class="shot">
+  <img src="assets/manual/adm-qr.jpg" alt="注文用QRのカード。QRコードの画像と、URLの欄、コピーと開くのボタン、QRを作り直すボタンが並んでいる" loading="lazy">
+  <figcaption>QRは<strong>イベントに1枚だけ</strong>。全部のテーブルに同じものを置く。</figcaption>
+</figure>
+
+<p>テーブル番号と席番号は<strong>プレイヤーが自分で選ぶ</strong>ので、卓ごとに違うQRを作る必要はない。印刷して各卓に置く。</p>
+
+<div class="note danger">
+  <b>「QRを作り直す」は押さない</b>
+  <p style="margin:6px 0 0">押すと<strong>刷ってあるQRが一斉に使えなくなる</strong>。全部刷り直しになる。前のイベントのQRを無効にしたいときだけ使う。</p>
+</div>
+
+<h2 id="pop"><span class="no">9</span>会場のモニターに映したいときは</h2>
+<ol class="steps">
+  <li><b>一覧で「POP設定」を押す</b></li>
+  <li><b>モニターの向きを選ぶ</b><br>ふつうは「横」。縦置きのテレビが映像を回転できないときは「縦」。</li>
+  <li><b>URLをコピーして、モニターのブラウザで開く</b><br>「販売中の品目のみ」がふつう。全部出したいときは「当日の全品目」。</li>
+</ol>
+
+<figure class="shot">
+  <img src="assets/manual/adm-pop.jpg" alt="POP設定の上部。モニターの向きを横・縦・縦（上下逆）から選ぶボタンと、2種類のURLの欄が並んでいる" loading="lazy">
+  <figcaption>向きを選んでからURLをコピーする。30秒ごとに自動で更新される。</figcaption>
+</figure>
+
+<p>写真とドリチケ枚数は、同じ画面の下で品目ごとに登録する。<strong>品目名ごとに覚えるので、次のイベントで同じ名前ならそのまま使われる</strong>。</p>
+
+<figure class="shot">
+  <img src="assets/manual/adm-popitem.jpg" alt="写真とドリチケ枚数の欄。写真をまとめて選ぶボタンと、品目ごとに写真・ドリチケ枚数の入力欄・保存・写真を選ぶボタンが並んでいる" loading="lazy">
+  <figcaption>ファイル名を品目名にしておけば「まとめて選ぶ」で自動で割り当たる。</figcaption>
+</figure>
+
+<h2 id="end"><span class="no">10</span>イベントが終わったときは</h2>
+<ol class="steps">
+  <li><b>注文設定で「受付を停止する」</b><br>撤収中に注文が入らないようにする。</li>
+  <li><b>一覧で「表示」のチェックを外す</b><br>アルバイトのログイン画面から消える。<strong>テストで作ったイベントも忘れずに外す。</strong></li>
+  <li><b>集計を見る</b><br>スプレッドシートの「残数_イベント名」のシートに、品目ごとの期限切れ率が出ている。<strong>期限切れ率が50%を超えた品目は薄い赤</strong>。次回の発注数を決める材料になる。</li>
+</ol>
+
+<div class="note ok">
+  <b>消さなくていい</b>
+  <p style="margin:6px 0 0">イベントを削除する必要はない。<strong>「非表示」にするだけ</strong>でいい。記録が残るので、次のイベントの発注数を決めるときに使える。</p>
+</div>
+
+<h2 id="faq"><span class="no">11</span>うまくいかないときは</h2>
+
+<div class="faqgroup">入れたのに反映されない</div>
+
+<details><summary>CSVを取り込んだのに、スタッフ画面に出てこない</summary><div>
+<p>いちばん下の<strong>青い「保存」を押していない</strong>。取り込んだ直後は画面の上に載っているだけで、まだスプレッドシートに入っていない。</p>
+</div></details>
+
+<details><summary>「不明な操作です」と出る</summary><div>
+<p>開いている画面が古い。<strong>ページを再読み込みする</strong>。それでも出るなら、URLの末尾に <code>&amp;v=2</code> のような適当な文字を足して開き直すと確実に取り直す。</p>
+</div></details>
+
+<details><summary>支払いだけ入れたはずが、品目まで変わった</summary><div>
+<p>「CSVファイルを選んで取り込む」のほうを押している。支払いだけのときは<strong>下のほうにある「CSVから支払いだけ取り込む」</strong>を使う。</p>
+</div></details>
+
+<div class="faqgroup">卓上注文</div>
+
+<details><summary>受付中なのに注文が届かない</summary><div>
+<p>受付時間の外。画面に<strong>「ただし受付時間外。注文は届きません」</strong>と出ていないか見る。<code>11:00-23:00</code> と書いてあると0時すぎは弾かれる。深夜まで受けるなら <code>10:00-28:00</code> のように書く。</p>
+</div></details>
+
+<details><summary>プレイヤーが「このQRは使えません」と言っている</summary><div>
+<p>QRを作り直したあとに、古いQRが卓に残っている。刷り直すか、作り直す前のQRをすべて回収する。</p>
+</div></details>
+
+<details><summary>プレイヤーが自分の卓を選べない</summary><div>
+<p>その卓が登録されていない。<strong>注文設定の「テーブルの設定」</strong>に書き足して「この内容にする」。</p>
+</div></details>
+
+<details><summary>スタッフ画面に注文が出てこない</summary><div>
+<p>担当するフロアで絞られている。帯に<strong>「ほかの担当ぶんの注文を◯件隠しています」</strong>と出ていれば「全部見る」を押す。絞り込みは端末ごとの設定で、サーバーには送っていない。</p>
+</div></details>
+
+<details><summary>ドリンクが注文画面に出ない</summary><div>
+<p>3つ考えられる。<strong>一覧に書いていない</strong>、<strong>頭に # が付いて隠れている</strong>、<strong>スタッフがその日の品切れにした</strong>。最後のものは、スタッフ画面の「注文」タブでボタンがもう一度押せば戻る。</p>
+</div></details>
+
+<div class="faqgroup">そのほか</div>
+
+<details><summary>アルバイトがログインできない</summary><div>
+<p>イベントが「非表示」になっているか、スタッフPINが違う。一覧で「表示」のチェックと、カードに出ているスタッフPINを確かめる。<strong>管理者PINを渡してはいけない。</strong></p>
+</div></details>
+
+<details><summary>賞味期限の帯が出ない品目がある</summary><div>
+<p>その品目の<strong>賞味期限が設定されていない</strong>。設定が空の品目には帯も音も出ない。編集画面でその受取のかたまりの「賞味期限」を入れる。</p>
+</div></details>
+
+<details><summary>受取タブの支払いの枠が空になっている</summary><div>
+<p>設定していなければ「支払い無し」と薄く出る。これは正常。枠そのものは必ず出るようにしてある。「設定し忘れ」と「支払い不要」を見分けられるようにするため。</p>
+</div></details>
+
+<details><summary>注文を受けたのに在庫が減らない</summary><div>
+<p>そういう作りになっている。<strong>注文は在庫を減らさない</strong>。依頼として記録するだけで、在庫切れの記録とは別に扱う。注文は受付であって、提供の確約ではない。</p>
+</div></details>
 
 <footer>
-  <p style="margin-bottom:4px">アルバイトに渡すのは <a href="manual-staff.html">アルバイト用 かんたん手引き</a>。</p>
-  <p style="margin:0">イベントの作りかた（イベント作成・CSV取り込み・写真・卓とQR）と、アプリの中身の仕様は、リポジトリの SETUP-ORDER.md・AGENTS.md にある。</p>
+  <p>アルバイトに配るのは <a href="manual-staff.html">アルバイト用の手引き</a>。イベント前の準備（初回だけの設定）は、リポジトリの <code>SETUP-ORDER.md</code> にある。</p>
+  <p>画面の写しはすべてテスト用の作り物。実在の店舗名・金額・PINは写していない。</p>
 </footer>
 
 </div>
