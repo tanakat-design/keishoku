@@ -9,10 +9,10 @@
 - `gas/appsscript.json`：GASのマニフェスト
 - `order.html`：卓上注文（プレイヤー用。卓のQRから開く。PIN不要）
 - 手引きは**2枚だけ**。読む人で分けてある。どちらも GitHub Pages で公開するので、**PINや店舗の連絡先・支払金額など、外に出せない内容は書かない**。**管理者PINを載せてほしいと頼まれても載せない。**URLを知った人が誰でも管理画面を開けるようになるためである。代わりに**在りかだけ**を書く（Apps Script の「JOPT 軽食在庫管理アプリ」→ プロジェクトの設定 → スクリプト プロパティ → `ADMIN_PIN`）。
-  - `manual-staff.html`：**アルバイト用**。イベント中に触る操作だけ。やること3つ → ログイン → 画面 → 1日の流れ → 受取／在庫切れ／期限切れ／注文 → 守ること → よくある質問。
+  - `manual-staff.html`：**アルバイト用**。イベント中に触る操作だけ。管理者用と同じく**「〇〇したいときは」の章立て**で11章（1ログイン → 2画面の見かた → 3受け取った → 4売り切れた → 5期限が近づいた → 6注文が入った → 7担当の卓だけ → 8ドリンクが切れた → 9電波が悪い → 10 1日が終わった → 11困ったら）。図ではなく**実画面の写しが主**で、8枚入っている。先頭に「やることは3つだけ」を置く。
   - `manual-admin.html`：**管理者用**。**「〇〇したいときは」の章立て**で11章。やりたいことから引く形にしてある（1管理画面を開く → 2イベントを作る → 3軽食を入れる（CSV）→ 4手で直す → 5支払いだけ直す → 6テーブル → 7ドリンク → 8注文を始める → 9モニターに映す → 10終わったとき → 11困ったら）。図ではなく**実画面の写しが主**で、11枚入っている。準備（初回だけの設定）は書かない——SETUP-ORDER.md にある。
-  - 図はSVGで、**縦に積む**こと。横長の図はスマホ幅で字が潰れる。配色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ）。
-  - `assets/manual/*.jpg` は**実際の画面の写し**。アルバイト用が login / record / recv / expiry / order、管理者用が `adm-` 付きの11枚（list / edit / csv / pay / group / order / qr / tables / drinks / pop / popitem）。本番のデータではなく、**ローカルで `window.fetch` を差し替えて作ったテスト用のデータ**を流して 390px 幅で撮った。公開ページなので実在の店舗名・金額・PINは写さない。画面を変えたら撮り直す。手順は `.claude/launch.json` の `keishoku` を起動し、`index.html` を開いて `S.session` / `S.day` を直接作ってから `render()` する。
+  - **2枚とも図（SVG）は使わない。実画面の写しで説明する。**CSSは `manual-admin.html` の2つ目の `<style>` が正で、`manual-staff.html` はそこから取って組み立ててある（見た目が必ず揃う）。配色は画面と同じ意味に揃える（黄＝予告・赤＝期限切れ・緑＝済んだ）。
+  - `assets/manual/*.jpg` は**実際の画面の写し**。アルバイト用が login / tabs / recv / record / expiry / order / area / drinkout の8枚（order はドリンクとフロアを入れて撮り直した）、管理者用が `adm-` 付きの11枚（list / edit / csv / pay / group / order / qr / tables / drinks / pop / popitem）。本番のデータではなく、**ローカルで `window.fetch` を差し替えて作ったテスト用のデータ**を流して 390px 幅で撮った。公開ページなので実在の店舗名・金額・PINは写さない。画面を変えたら撮り直す。手順は `.claude/launch.json` の `keishoku` を起動し、`index.html` を開いて `S.session` / `S.day` を直接作ってから `render()` する。
   - Artifact（claude.ai/artifact/MvDkC7HgsYE4c8Y2ihi5Nt）も同じ内容に保つ。**2枚を1つのArtifactにまとめてある**（`manual-staff.html` がページ本体、`manual-admin.html` は `files` で同梱。ページ本体の複製も `files` に入れて相対リンクを通している）。別々に publish するとページ間のリンクが切れる。
 - `test.html`：POPの表示テスト（SPADIE / JOPT / 標準のリンク集。見本データで開く）
 - `gas/test-order.js`：GASのグローバルをスタブして注文ロジックを Node で検証する（`node gas/test-order.js gas/Code.gs`）

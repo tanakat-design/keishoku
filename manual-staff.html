@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="イベント中にアルバイトが触る操作だけをまとめた手引き。やることは3つ。">
+<meta name="description" content="イベント中にアルバイトが触る操作だけをまとめた手引き。やりたいことから引く。実際の画面の写し付き。">
 <style>
 /* GitHub Pages で単体で開くときの土台。Artifact 側の既定と同じにしてある */
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -132,415 +132,290 @@ details li{margin-bottom:4px}
 
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 管理者用で足すぶん */
+.where{background:var(--accent-weak);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px}
+.where b{font-family:var(--display);display:block;margin-bottom:4px}
+.where p:last-child{margin-bottom:0}
+.lead{font-size:17.5px;margin:0 0 16px}
+h2 .no{background:var(--fg)}
 </style>
 
 <div class="wrap">
 
 <nav>
   <ol>
-    <li><a href="#start">やることは3つ</a></li>
     <li><a href="#login">ログイン</a></li>
-    <li><a href="#tabs">画面</a></li>
-    <li><a href="#day">1日の流れ</a></li>
-    <li><a href="#recv">受け取る</a></li>
-    <li><a href="#out">売り切れ</a></li>
-    <li><a href="#exp">賞味期限</a></li>
-    <li><a href="#order">注文</a></li>
-    <li><a href="#rules">守ること</a></li>
+    <li><a href="#screen">画面の見かた</a></li>
+    <li><a href="#recv">受け取った</a></li>
+    <li><a href="#soldout">売り切れた</a></li>
+    <li><a href="#expiry">期限が近い</a></li>
+    <li><a href="#order">注文が入った</a></li>
+    <li><a href="#area">担当の卓だけ</a></li>
+    <li><a href="#drink">ドリンクが切れた</a></li>
+    <li><a href="#offline">電波が悪い</a></li>
+    <li><a href="#end">1日が終わった</a></li>
     <li><a href="#faq">困ったら</a></li>
   </ol>
 </nav>
 
 <header>
   <h1>アルバイト用<br>かんたん手引き</h1>
-  <p class="lede">イベント中にあなたが触るのは、この3つだけ。</p>
+  <p class="lede">やりたいことから引く。上の並びから選んでも、順に読んでもいい。画像はすべて実際の画面（中身はテスト用の作り物）。</p>
 </header>
 
-<h2 id="start" style="margin-top:28px"><span class="no">1</span>やることは3つだけ</h2>
+<div class="note ok">
+  <b>やることは3つだけ</b>
+  <p style="margin:6px 0 0"><strong>①品物を受け取ったら押す　②売り切れたら押す　③賞味期限の赤い帯に数を入れる</strong>。これだけ。あとは注文が来たら届ける。迷ったら社員に聞いていい。</p>
+</div>
 
-<ul class="three">
-  <li>
-    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="箱を受け取る絵">
-      <rect x="10" y="18" width="44" height="24" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/>
-      <line x1="10" y1="26" x2="54" y2="26" stroke="currentColor" stroke-width="2.5"/>
-      <line x1="32" y1="18" x2="32" y2="42" stroke="currentColor" stroke-width="2.5"/>
-      <polyline points="22,12 32,4 42,12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <b>受け取ったら押す</b><span>受取タブ</span>
-  </li>
-  <li>
-    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="空の皿の絵">
-      <path d="M8 30 Q32 44 56 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="20" y1="36" x2="44" y2="36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="22" y1="8" x2="42" y2="24" stroke="#a52019" stroke-width="3" stroke-linecap="round"/>
-      <line x1="42" y1="8" x2="22" y2="24" stroke="#a52019" stroke-width="3" stroke-linecap="round"/>
-    </svg>
-    <b>なくなったら押す</b><span>在庫切れ記録タブ</span>
-  </li>
-  <li>
-    <svg viewBox="0 0 64 48" width="64" height="48" role="img" aria-label="時計の絵">
-      <circle cx="32" cy="26" r="16" fill="none" stroke="currentColor" stroke-width="2.5"/>
-      <polyline points="32,16 32,26 40,30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <line x1="32" y1="4" x2="32" y2="8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>
-    <b>期限が来たら数を入れる</b><span>赤い帯のなか</span>
-  </li>
-</ul>
-
-<p>注文を使うイベントでは、ここに<strong>「注文が来たら届ける」</strong>が足される。下で説明する。</p>
-
-<h2 id="login"><span class="no">2</span>ログインのしかた</h2>
-
-<p>スマホのブラウザでこのURLを開く。<strong>アプリを入れる必要も、アカウントを作る必要も無い。</strong></p>
-<p style="word-break:break-all"><a href="https://tanakat-design.github.io/keishoku/?openExternalBrowser=1">https://tanakat-design.github.io/keishoku/?openExternalBrowser=1</a></p>
-<p style="color:var(--muted);font-size:15.5px">末尾の <code>?openExternalBrowser=1</code> は消さない。LINEで送られたリンクを踏んだとき、LINEの中のブラウザではなく普通のブラウザで開くための呪文。LINEの中で開くと動きがおかしくなる。</p>
-
+<h2 id="login"><span class="no">1</span>ログインしたいときは</h2>
 <ol class="steps">
-  <li><b>イベントを選ぶ。</b>リストに出てくるのは「表示」になっているイベントだけ。</li>
-  <li><b>スタッフPINを入れる。</b>伏せ字になるので、不安なら右の「表示」を押すと見える。</li>
-  <li><b>自分の名前を入れる。</b>誰が記録したかが残る。フルネームでなくていい。</li>
+  <li><b>配られたURLを開く</b><br>LINEから開くなら、リンクをそのまま押す。</li>
+  <li><b>イベントを選ぶ</b><br>今日のイベントが出ていなければ社員に言う。</li>
+  <li><b>スタッフPINを入れる</b><br>配られた数字。右の「表示」を押すと入れた中身が見える。</li>
+  <li><b>名前を入れて「開始」</b><br><strong>必ず自分の名前</strong>。誰が押したかの記録になる。</li>
 </ol>
-
-<p>一度入れば、同じ端末では次から自動で入る。人が交代するときは右上の<strong>「切替」</strong>で名前を入れ直す。</p>
 
 <figure class="shot">
   <img src="assets/manual/login.jpg" alt="ログイン画面。イベントを選ぶ欄、スタッフPINの欄、名前の欄、開始ボタンが並んでいる" loading="lazy">
-  <figcaption>この3つを入れて「開始」。PINの右の「表示」で中身が見える。</figcaption>
+  <figcaption>この3つを入れて「開始」。</figcaption>
 </figure>
 
-<div class="note warn"><b>PINは2種類ある。</b>あなたが使うのは<strong>スタッフPIN</strong>。<strong>管理者PIN</strong>は社員が使うもので、入れても通らない。</div>
-
-<h3>画面は3つあるが、あなたが使うのは1つ</h3>
-<div class="tw">
-<table>
-  <tr><th>画面</th><th>誰が</th><th>何をする</th></tr>
-  <tr><td><strong>軽食管理アプリ</strong></td><td>あなた</td><td>受取・在庫切れ・期限切れ・注文。<strong>これがあなたの画面。</strong></td></tr>
-  <tr><td>デジタルPOP</td><td>お客様</td><td>モニターに映る品目一覧。売り切れると自動で白黒になる。<strong>触らない。</strong></td></tr>
-  <tr><td>卓上注文</td><td>プレイヤー</td><td>卓のQRから注文する画面。あなたは注文タブで受ける。</td></tr>
-</table>
+<div class="note warn">
+  <b>PINは他の人に教えない</b>
+  <p style="margin:6px 0 0">お客様に画面を見せない。もしPINを人に見られたら社員に言う。</p>
 </div>
 
-<h2 id="tabs"><span class="no">3</span>画面のどこを触るか</h2>
+<h2 id="screen"><span class="no">2</span>画面の見かたを知りたいときは</h2>
+<p>上に<strong>4つのタブ</strong>が並んでいる。やることで押し分ける。</p>
 
-<figure>
-  <svg viewBox="0 0 400 392" role="img" aria-label="画面の上に賞味期限の帯があり、その下に4つのタブが並ぶ。それぞれのタブをいつ触るかを示した図">
-    <defs>
-      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
-      </marker>
-    </defs>
-    <rect x="6" y="6" width="388" height="56" rx="8" fill="#b3261e"/>
-    <text x="22" y="30" font-size="15" font-weight="700" fill="#fff">うえに出る帯</text>
-    <text x="22" y="50" font-size="12.5" fill="#fff">期限が近い・切れた、と知らせる。閉じられない</text>
-
-    <rect x="6" y="80" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="81" y="108" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">在庫切れ記録</text>
-    <line x1="162" y1="102" x2="186" y2="102" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
-    <text x="196" y="107" font-size="13.5" fill="currentColor">売り切れた そのとき</text>
-
-    <rect x="6" y="142" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="81" y="170" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">期限切れ</text>
-    <line x1="162" y1="164" x2="186" y2="164" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
-    <text x="196" y="169" font-size="13.5" fill="currentColor">捨てる数を数えたとき</text>
-
-    <rect x="6" y="204" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="81" y="232" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">受取</text>
-    <line x1="162" y1="226" x2="186" y2="226" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
-    <text x="196" y="231" font-size="13.5" fill="currentColor">朝イチと受け取るとき</text>
-
-    <rect x="6" y="266" width="150" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="81" y="294" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">注文</text>
-    <line x1="162" y1="288" x2="186" y2="288" stroke="currentColor" stroke-width="2" marker-end="url(#ar)"/>
-    <text x="196" y="293" font-size="13.5" fill="currentColor">鈴が鳴ったとき</text>
-
-    <rect x="6" y="328" width="388" height="56" rx="8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4"/>
-    <text x="200" y="352" font-size="13" text-anchor="middle" fill="currentColor">いちばん下に「最終更新 ◯:◯◯」</text>
-    <text x="200" y="372" font-size="13" text-anchor="middle" fill="currentColor">3分以上前のままなら、つながっていない</text>
-  </svg>
-  <figcaption>触るのは4つのタブだけ。帯は上に出っぱなしで、閉じられない。</figcaption>
+<figure class="shot">
+  <img src="assets/manual/tabs.jpg" alt="ログイン後の画面の上部。イベント名、日付のボタン、在庫切れ記録・期限切れ・受取・注文の4つのタブが並んでいる" loading="lazy">
+  <figcaption>タブの右に数が出ていたら、その件数ぶん手つかずが残っている。</figcaption>
 </figure>
 
-<h2 id="day"><span class="no">4</span>1日の流れ</h2>
+<div class="tw"><table>
+<tr><th>タブ</th><th>いつ押すか</th></tr>
+<tr><td>受取</td><td>お店から品物を受け取ったとき</td></tr>
+<tr><td>在庫切れ記録</td><td>品物が売り切れたとき</td></tr>
+<tr><td>期限切れ</td><td>賞味期限が来て、余った数を入れるとき</td></tr>
+<tr><td>注文</td><td>卓から注文が入ったとき</td></tr>
+</table></div>
 
-<ul class="flow">
-  <li><span class="when">開始前</span><span class="what">ログインして<strong>受取タブ</strong>を見る。今日は何時にどの店から何が来るか、支払いは現地か済んでいるかを確かめる。</span></li>
-  <li><span class="when">受取の時間</span><span class="what">現物を受け取る。数を数える。<strong>「受取済みにする」</strong>を押す。カードが緑になる。</span></li>
-  <li><span class="when">営業中</span><span class="what">売れてなくなったら、その場で<strong>在庫切れ記録タブ</strong>から押す。注文が入ったら<strong>注文タブ</strong>に出る。</span></li>
-  <li><span class="when">期限の30分前</span><span class="what"><strong>黄色い帯</strong>が出て、残り時間が1分ずつ減る。片付けの準備をする。</span></li>
-  <li><span class="when">期限を過ぎた</span><span class="what"><strong>赤い帯</strong>に変わる。残りを数えて、赤い帯の中に入れて「登録」。帯が消える。</span></li>
-  <li><span class="when">閉店後</span><span class="what">受取タブの「受取済み ◯/◯件」と期限切れタブを見て、入れ忘れが無いか確かめる。</span></li>
-</ul>
+<p>画面のいちばん上に<strong>黄色や赤の帯</strong>が出ることがある。これは賞味期限のお知らせで、消すことはできない。<a href="#expiry">「賞味期限が近づいたときは」</a>を見る。</p>
 
-<h2 id="recv"><span class="no">5</span>受け取ったとき</h2>
+<h2 id="recv"><span class="no">3</span>品物を受け取ったときは</h2>
+<ol class="steps">
+  <li><b>「受取」タブを開く</b></li>
+  <li><b>受け取ったお店のカードを探す</b><br>受取時間の早い順に並んでいる。</li>
+  <li><b>中身と数を確かめる</b><br>足りなければ社員に言う。</li>
+  <li><b>「受取済みにする」を押す</b><br>カードが<strong>緑</strong>になって、時刻と自分の名前が入る。</li>
+</ol>
 
 <figure class="shot">
   <img src="assets/manual/recv.jpg" alt="受取タブの画面。上のカードは受取済みで緑になっており、下のカードには支払方法と支払金額の黄色い枠が出ている" loading="lazy">
   <figcaption>上は受け取り済み（緑）。下はまだ。黄色い枠が支払い。</figcaption>
 </figure>
 
+<div class="note warn">
+  <b>黄色い枠は支払いのこと</b>
+  <p style="margin:6px 0 0">「請求書払い」なら受け取るだけ。<strong>金額が書いてあったらその場で払う</strong>。「支払い無し」と薄く出ていれば払わなくていい。分からなければ払う前に社員に聞く。</p>
+</div>
+
+<p>押し間違えたら「取消」で戻せる。<strong>受取を押しても在庫は変わらない</strong>。受け取ったかどうかの記録だけ。</p>
+
+<h2 id="soldout"><span class="no">4</span>売り切れたときは</h2>
 <ol class="steps">
-  <li><b>数を数える。</b>頼んだ数と合っているか見る。</li>
-  <li><b>支払いを見る。</b>黄色い枠に「都度現地決済」などと書いてあれば、その場で払う。「支払い済み」なら払わない。</li>
-  <li><b>緑のボタンを押す。</b>カードが緑になって、あなたの名前と時刻が残る。</li>
+  <li><b>「在庫切れ記録」タブを開く</b></li>
+  <li><b>売り切れた品目を押す</b><br>押すと<strong>赤枠</strong>になる。まとめて何個でも選べる。</li>
+  <li><b>下のボタンを押す</b><br>ボタンに選んだ件数が出ている。</li>
 </ol>
-
-<div class="note warn"><b>「支払い無し」と出たら、払わずに社員を呼ぶ。</b>「払わなくていい」ではなく「何も書かれていない」という意味。現地で請求されたら、その場で払わない。</div>
-
-<h2 id="out"><span class="no">6</span>売り切れたとき</h2>
 
 <figure class="shot">
   <img src="assets/manual/record.jpg" alt="在庫切れ記録タブ。受取時間ごとに品目が並び、選んだ品目だけ赤枠で選択中と出ている。下に時刻と備考の欄と、在庫切れを記録するボタンがある" loading="lazy">
-  <figcaption>品目をタップすると赤くなる。下のボタンに選んだ件数が出る。</figcaption>
+  <figcaption>品目を押すと赤くなる。下のボタンに選んだ件数が出る。</figcaption>
 </figure>
 
+<div class="note danger">
+  <b>すぐ押す</b>
+  <p style="margin:6px 0 0">押した時刻がそのまま記録になる。<strong>あとでまとめて押すと時刻がずれて、次回の発注数がくるう。</strong></p>
+</div>
+
+<p>忙しくてすぐ押せなかったときは、下の<strong>時刻の欄に実際に売り切れた時刻</strong>を入れてから押す。理由があれば備考に書く。</p>
+
+<h2 id="expiry"><span class="no">5</span>賞味期限が近づいたときは</h2>
+<p>画面のいちばん上に帯が出る。<strong>帯は閉じられない</strong>。やることをやると自然に消える。</p>
+
+<div class="demo y">あと25分で からあげ弁当 が期限切れです</div>
+<p>→ <strong>黄色</strong>。まだ何もしなくていい。売れそうなら声をかける。</p>
+
+<div class="demo r">からあげ弁当 が期限切れになりました。</div>
+<p>→ <strong>赤</strong>。<strong>残った数を入れる。</strong></p>
+
 <ol class="steps">
-  <li><b>在庫切れ記録タブを開く。</b></li>
-  <li><b>なくなった品目をタップする。</b>選ぶと色が変わる。</li>
-  <li><b>記録を押す。</b>これだけ。</li>
+  <li><b>赤い帯の中の欄に、余った数を入れる</b><br>タブを移らなくていい。帯の中でそのまま入る。</li>
+  <li><b>売り切れていて1つも残っていなければ 0</b></li>
+  <li><b>「登録」を押す</b><br>押すと帯が消える。</li>
 </ol>
-
-<div class="note danger"><b>0個になった瞬間に押す。</b>残り1個のときではない。あとでまとめて入れると、何時に切れたかが残らない。次のイベントで何個頼むかが決められなくなる。</div>
-
-<p>押し忘れたら、品目を選んだときに出る<strong>時刻の欄</strong>に <code>21:30</code> のように手で入れれば、実際の時刻で残せる。間違えたら「取消」で戻せる。</p>
-
-<h2 id="exp"><span class="no">7</span>賞味期限が来たとき</h2>
 
 <figure class="shot">
   <img src="assets/manual/expiry.jpg" alt="画面の上に赤い帯が出て、そのなかに品目ごとの個数の欄と登録ボタンが並び、その下に黄色い予告の帯が続いている" loading="lazy">
-  <figcaption>赤い帯のなかに欄がある。ここに入れて「登録」。下の黄色は次の予告。</figcaption>
+  <figcaption>赤い帯の中に数を入れて「登録」。それで消える。</figcaption>
 </figure>
 
+<div class="note danger">
+  <b>赤い帯を放置しない</b>
+  <p style="margin:6px 0 0">鈴の音が鳴る。<strong>数を入れるまで鳴り続けるわけではない</strong>ので、音が止まっても帯が残っていたら必ず入れる。期限が切れた品物は<strong>出さない</strong>。</p>
+</div>
+
+<h2 id="order"><span class="no">6</span>注文が入ったときは</h2>
+<p>卓から注文が入ると<strong>鈴の音</strong>が鳴り、「注文」タブに数が出る。</p>
 <ol class="steps">
-  <li><b>残っている数を数える。</b>売れた数ではない。<strong>捨てる数</strong>。</li>
-  <li><b>赤い帯の欄に入れて「登録」。</b>0なら0と入れる。空のままだと送られない。</li>
-  <li><b>帯が消えたら終わり。</b>消えなければ、ほかにもう1件ある。</li>
+  <li><b>「注文」タブを開く</b><br>赤い線のカードが<strong>まだ誰も動いていない注文</strong>。</li>
+  <li><b>「届けに行く」を押してから取りに行く</b><br>押すと自分の名前が入り、ほかの人とかぶらない。</li>
+  <li><b>渡したら「完了」</b></li>
+  <li><b>品切れなどで渡せないときは「取消」</b><br>理由を聞かれるので短く書く。</li>
 </ol>
 
-<div class="note warn"><b>11時ぶんと17時ぶんは別々に数える。</b>同じ品目でも帯や画面が分かれている。足して片方に入れると、在庫より多い数になって集計が狂う。</div>
-
-<p style="color:var(--muted);font-size:15.5px">鈴は最初の1回だけ鳴る。帯は出っぱなしなので、音を逃しても見れば分かる。</p>
-
-<h2 id="order"><span class="no">8</span>注文が来たとき</h2>
-
-<figure>
-  <svg viewBox="0 0 400 324" role="img" aria-label="お客がQRから注文し、スタッフの画面に鈴とともに出て、届けに行くを押し、渡して完了を押すまでの流れ">
-    <defs>
-      <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
-      </marker>
-    </defs>
-    <rect x="6" y="6" width="388" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="200" y="32" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">お客が卓のQRで注文する</text>
-    <text x="200" y="52" font-size="12.5" text-anchor="middle" fill="currentColor">卓と席は自分で選ぶ</text>
-    <line x1="200" y1="66" x2="200" y2="82" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
-
-    <rect x="6" y="86" width="388" height="56" rx="10" fill="none" stroke="#1558c0" stroke-width="2.5"/>
-    <text x="200" y="112" font-size="15" font-weight="700" text-anchor="middle" fill="#1558c0">鈴が鳴って、注文タブに出る</text>
-    <text x="200" y="132" font-size="12.5" text-anchor="middle" fill="currentColor">画面を閉じていると鳴らない</text>
-    <line x1="200" y1="146" x2="200" y2="162" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
-
-    <rect x="6" y="166" width="388" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="200" y="192" font-size="15" font-weight="700" text-anchor="middle" fill="currentColor">「届けに行く」を押す</text>
-    <text x="200" y="212" font-size="12.5" text-anchor="middle" fill="currentColor">「自分が行く」と他の人に伝わる</text>
-    <line x1="200" y1="226" x2="200" y2="242" stroke="currentColor" stroke-width="2" marker-end="url(#ar3)"/>
-
-    <rect x="6" y="246" width="388" height="56" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2.5"/>
-    <text x="200" y="272" font-size="15" font-weight="700" text-anchor="middle" fill="#1e6b31">渡して「完了」を押す</text>
-    <text x="200" y="292" font-size="12.5" text-anchor="middle" fill="currentColor">ドリチケはこのとき受け取る</text>
-  </svg>
-  <figcaption>品切れで渡せないときは「取消」。理由を選ぶと、お客の画面に出る。</figcaption>
+<figure class="shot">
+  <img src="assets/manual/order.jpg" alt="注文タブ。601番テーブル3番シートの注文カードに品目とドリチケ枚数が並び、届けに行く・完了・取消のボタンがある。下のカードは配達中で担当者の名前が入っている" loading="lazy">
+  <figcaption>上は手つかず（赤い線）。下は誰かが向かっている（配達中）。</figcaption>
 </figure>
+
+<div class="note warn">
+  <b>注文は在庫を減らさない</b>
+  <p style="margin:6px 0 0">注文が入っても在庫の数は変わらない。<strong>売り切れたら別に「在庫切れ記録」で押す。</strong>この2つは別の作業。</p>
+</div>
+
+<h2 id="area"><span class="no">7</span>担当の卓だけ見たいときは</h2>
+<p>フロアが分かれている会場では、<strong>自分の担当ぶんだけ</strong>に絞れる。音も担当ぶんだけ鳴る。</p>
 
 <figure class="shot">
-  <img src="assets/manual/order.jpg" alt="注文タブ。上に担当する卓のボタンが並び、その下に注文カードが2件。1件は受付で届けに行くボタンがあり、もう1件は配達中で担当者名が出ている" loading="lazy">
-  <figcaption>赤い線が未対応。青い線は誰かが届けに行っている。</figcaption>
+  <img src="assets/manual/area.jpg" alt="担当する卓の選択。全部・B2（2卓）・6F（2卓）のボタンが並び、全部が選ばれている" loading="lazy">
+  <figcaption>自分がいるフロアを押すだけ。この端末だけの設定。</figcaption>
 </figure>
 
-<p><strong>自分の担当する卓だけ出すこともできる。</strong>注文タブの上に「100番台」「200番台」のボタンが出たら、自分の階を押しておく。押した階の注文だけが出て、その階だけ鳴る。</p>
-
-<div class="note ok"><b>注文担当の端末は開きっぱなしにする。</b>画面を閉じると鈴が鳴らない。1台決めて、充電しながら置いておく。</div>
-
-<h2 id="rules"><span class="no">9</span>これだけは守ること</h2>
-
-<ul class="rules">
-  <li>
-    <span class="head">品切れはその場で押す</span>
-    <span class="why">何時に切れたかが分からないと、次のイベントで何個頼めばいいかが決められない。閉店後にまとめて入れると、この時刻がまるごと失われる。前回のイベントでは、品切れが10品目あって記録は0件だった。</span>
-  </li>
-  <li>
-    <span class="head">期限切れ数は受取の時間帯ごとに分ける</span>
-    <span class="why">11時受取と17時受取で同じ品目があるとき、残りを合算して片方に入れない。在庫数より多い数になって、集計がマイナスになる。画面も受取ごとに分かれている。</span>
-  </li>
-  <li>
-    <span class="head">注文担当の端末は開きっぱなしにする</span>
-    <span class="why">通知は画面を開いている間しか鳴らない。画面を閉じると注文に気づけない。1台決めて、充電しながら開いておく。</span>
-  </li>
+<ul>
+  <li>押しても<strong>ほかの人の画面は変わらない</strong>。自分のスマホだけ。</li>
+  <li>隠れている注文があると「ほかの担当ぶんの注文を◯件隠しています」と出る。<strong>「全部見る」で全部出る。</strong></li>
+  <li><strong>10分ほったらかしの注文は、担当外でも鳴る。</strong>その階の人が気づいていないかもしれないので、見に行くか社員に言う。</li>
 </ul>
 
-<h2 id="faq"><span class="no">10</span>困ったら</h2>
-<p style="color:var(--muted);font-size:15.5px">毎回聞かれるもの。先にここを見てほしい。</p>
+<h2 id="drink"><span class="no">8</span>ドリンクが切れたときは</h2>
+<p>「注文」タブの上のほうにドリンクのボタンが並んでいる。</p>
+<ol class="steps">
+  <li><b>切れたドリンクのボタンを押す</b><br>確認が出るので「OK」。</li>
+  <li><b>赤くなって「品切れ」と出れば終わり</b><br>その日だけ、卓の注文画面から消える。</li>
+  <li><b>入ったら、もう一度押して戻す</b></li>
+</ol>
 
-<div class="faqgroup">ログイン</div>
+<figure class="shot">
+  <img src="assets/manual/drinkout.jpg" alt="ドリンクの品切れの欄。コーラ・ウーロン茶・ハイボールのボタンが並び、ウーロン茶だけ赤く品切れと出ている" loading="lazy">
+  <figcaption>赤くなっているものが品切れ。押せば戻せる。</figcaption>
+</figure>
 
-<details>
-  <summary>PINが通らない</summary>
-  <div>
-    <ul>
-      <li><strong>イベントを間違えていないか。</strong>PINはイベントごとに違う。上の「イベント」の欄が合っているか見る。</li>
-      <li><strong>管理者PINを入れていないか。</strong>あなたが使うのはスタッフPIN。別物。</li>
-      <li><strong>全角で打っていないか。</strong>全角数字でも通るように直してあるが、古い画面が残っていることがある。ページを再読み込みしてから半角で入れ直す。</li>
-      <li>PINの右の<strong>「表示」</strong>を押すと、入れた中身が見える。</li>
-    </ul>
-    <p>それでも駄目なら、PINを配った人に確認する。</p>
-  </div>
-</details>
+<div class="note ok">
+  <b>押しても怒られない</b>
+  <p style="margin:6px 0 0">間違えて押しても、もう一度押せばすぐ戻る。<strong>その日のそのイベントだけ</strong>で、翌日には戻っている。</p>
+</div>
 
-<details>
-  <summary>イベントがリストに出てこない</summary>
-  <div><p>そのイベントが「非表示」になっている。社員に言えば切り替えてもらえる。終わったイベントは非表示にしてあるので、<strong>前のイベントを探しても出てこないのが正常。</strong></p></div>
-</details>
+<h2 id="offline"><span class="no">9</span>電波が悪いときは</h2>
+<p><strong>そのまま押していい。</strong>押した内容は端末に残り、電波が戻ったときに自動で送られる。</p>
+<ul>
+  <li>「通信できないため端末に保存しました」と出たら、それで<strong>ちゃんと記録されている</strong>。</li>
+  <li>送られると「未送信データを送信しました」と出る。</li>
+  <li><strong>アプリを閉じても消えない。</strong>ただし、送り終わるまでは念のため閉じない。</li>
+</ul>
 
-<details>
-  <summary>人が交代するとき、どうするか</summary>
-  <div><p>右上の<strong>「切替」</strong>を押して、名前を入れ直す。イベントとPINはそのままでいい。これをやらないと、前の人の名前で記録が残る。</p></div>
-</details>
+<div class="note warn">
+  <b>何度も押さない</b>
+  <p style="margin:6px 0 0">反応が無くても<strong>連打しない</strong>。二重に記録されないようになっているが、待つのがいちばん早い。</p>
+</div>
 
-<div class="faqgroup">在庫切れ</div>
+<h2 id="end"><span class="no">10</span>1日が終わったときは</h2>
+<ol class="steps">
+  <li><b>赤い帯が残っていないか見る</b><br>残っていたら数を入れる。</li>
+  <li><b>「注文」タブに残っていないか見る</b><br>残っていたら「完了」か「取消」にする。</li>
+  <li><b>「期限切れ」タブを開いて、空いている欄を埋める</b><br>余った数が入っていない品目があれば入れる。</li>
+  <li><b>送信待ちが無いか見る</b><br>「送信待ち」と出ていたら、電波のあるところで少し待つ。</li>
+</ol>
 
-<details>
-  <summary>「在庫切れ」はいつ押すのか</summary>
-  <div><p><strong>その品目が売り切れて、お客様に出せなくなった瞬間。</strong>残り1個になったときではない。0個になったとき。</p><p>押すと、その時刻・品目・押した人がその場で記録される。デジタルPOPもすぐ「SOLD OUT」に変わる。</p></div>
-</details>
+<div class="note ok">
+  <b>ログアウトしなくていい</b>
+  <p style="margin:6px 0 0">そのまま閉じていい。次に開いたときも同じイベントのまま使える。</p>
+</div>
 
-<details>
-  <summary>押し忘れた。後から入れられるか</summary>
-  <div><p>入れられる。品目を選ぶと<strong>時刻の欄</strong>が出るので、<code>21:30</code> のように実際に切れた時刻を入れて記録する。備考欄に「気づくのが遅れた」などと書いてもいい。</p><p>深夜0時〜4時台の時刻は、その日の翌日として扱われる。<strong>未来の時刻は入れられない。</strong></p></div>
-</details>
+<h2 id="faq"><span class="no">11</span>困ったときは</h2>
 
-<details>
-  <summary>間違えて在庫切れにした</summary>
-  <div><p>在庫切れ記録タブで、その品目の<strong>「取消」</strong>を押す。元に戻る。記録自体は「取消」として残るので、消えてなくなるわけではない。</p></div>
-</details>
+<div class="faqgroup">画面のこと</div>
 
-<details>
-  <summary>品切れなのに期限切れタブに出てこない</summary>
-  <div><p>正常。<strong>在庫切れにした品目は期限切れタブから消える。</strong>捨てる分はゼロなので、自動で0として記録される。数を入れる必要はない。</p></div>
-</details>
+<details><summary>赤い帯が消えない</summary><div>
+<p>数を入れて「登録」を押していない。または、入れた品目がまだ残っている。帯に出ている品目を全部入れると消える。</p>
+</div></details>
 
-<div class="faqgroup">期限切れ</div>
+<details><summary>音が鳴らない</summary><div>
+<p>スマホがマナーモードか、画面を一度も触っていない。<strong>画面をどこか一度タップする</strong>と鳴るようになる。音量も上げる。</p>
+</div></details>
 
-<details>
-  <summary>「期限切れ数」には何を入れるのか</summary>
-  <div><p><strong>賞味期限が来て、捨てる数。</strong>売れた数ではない。残っていた数。</p><p>0なら0と入れる。空欄のままだと送信されない。</p></div>
-</details>
+<details><summary>注文が消えた</summary><div>
+<p>担当する卓で絞られている。<strong>「全部見る」</strong>を押すか、「全部」のボタンを押す。</p>
+</div></details>
 
-<details>
-  <summary>11時受取と17時受取で同じ品目がある。どっちに入れるのか</summary>
-  <div><p><strong>それぞれ別に数えて、別々に入れる。</strong>画面も「11:00 受取分」「17:00 受取分」で分かれている。</p><p>合算して片方に入れると、在庫数より多い数になって集計がおかしくなる。実際にこれが起きて、消費数がマイナスになった行がある。</p></div>
-</details>
+<details><summary>品目が出てこない</summary><div>
+<p>もう在庫切れにしてあるか、まだ受取時間になっていない。「期限切れ」タブには在庫切れの品目は出ない。</p>
+</div></details>
 
-<details>
-  <summary>「在庫数より多い期限切れ数があります」と出た</summary>
-  <div><p>入れた数が、設定してある在庫数より多い。だいたい次のどれか。</p>
-  <ul>
-    <li>受取の時間帯を混ぜて数えた（いちばん多い）</li>
-    <li>そもそも届いた数が設定と違った</li>
-    <li>打ち間違い</li>
-  </ul>
-  <p>心当たりがなく、本当にその数なら「OK」で進んでいい。<strong>ただし後で社員に伝える。</strong></p></div>
-</details>
+<div class="faqgroup">押し間違えた</div>
 
-<details>
-  <summary>赤い帯が消えない</summary>
-  <div><p>その受取の品目が、まだ1つも処理されていない。<strong>在庫切れにするか、期限切れ数を入れて「登録」すると消える。</strong></p><p>登録したのに消えないときは、他にもう1件期限切れがある。帯は切れたものから順に並ぶ。</p></div>
-</details>
+<details><summary>受取済みを間違えて押した</summary><div>
+<p>同じカードの「取消」を押す。何度でも押し直せる。</p>
+</div></details>
 
-<details>
-  <summary>鈴が鳴らない</summary>
-  <div><p>マナーモードか、音量が0か、画面を一度もタップしていない。<strong>ブラウザは最初のタップがあるまで音を出せない決まりになっている。</strong>どこか1回タップしておく。</p><p>鈴は受取ごとに1回だけ。帯は出っぱなしなので、音を逃しても見れば分かる。</p></div>
-</details>
+<details><summary>在庫切れを間違えて押した</summary><div>
+<p>同じ品目をもう一度開くと「取り消す」が出る。取り消すと記録した時刻も消える。</p>
+</div></details>
 
-<details>
-  <summary>賞味期限の帯が出ない品目がある</summary>
-  <div><p>その品目に賞味期限が設定されていない。帯は期限が入っているものにしか出ない。社員に伝えて入れてもらう。</p></div>
-</details>
+<details><summary>ドリンクの品切れを間違えて押した</summary><div>
+<p>もう一度押せば戻る。確認は出ない。</p>
+</div></details>
 
-<div class="faqgroup">受取</div>
+<details><summary>期限切れの数を間違えて入れた</summary><div>
+<p>同じ欄に正しい数を入れて、もう一度「登録」。あとから入れ直した数で上書きされる。</p>
+</div></details>
 
-<details>
-  <summary>「受取済みにする」は押さないと駄目か</summary>
-  <div><p><strong>押してほしい。</strong>誰が何時に受け取ったかが残る。画面上部に「受取済み 3/8件」と出るので、受け取り漏れがひと目で分かる。</p><p>押すとカードが緑になって「受取済み 17:08・田中」と出る。間違えたら「取消」で戻せる。</p></div>
-</details>
+<div class="faqgroup">つながらない</div>
 
-<details>
-  <summary>支払いはどこで見るのか</summary>
-  <div><p>受取タブの、薄い黄色の枠。<strong>支払方法</strong>と<strong>支払金額</strong>が2行で出る。金額は大きく表示される。</p><p>「13日カード払い」「請求書払い」「支払い済み」「都度現地決済」などと書いてある。<strong>現地で払うものだけ、その場で払う。</strong></p></div>
-</details>
+<details><summary>ログインできない</summary><div>
+<p>PINが違うか、イベントが選べていない。それでも入れなければ社員に言う。<strong>自分で何度も試さない。</strong></p>
+</div></details>
 
-<details>
-  <summary>「支払い無し」と出ている</summary>
-  <div><p>元のシートに何も書かれていない、という意味。<strong>払わなくていい、とは限らない。</strong></p><p>現地で請求されたら、払わずに社員に連絡する。</p></div>
-</details>
+<details><summary>「通信できません」と出る</summary><div>
+<p>電波が弱い。<strong>押した内容は端末に残っている</strong>ので、電波のあるところに移動すれば自動で送られる。押し直さなくていい。</p>
+</div></details>
 
-<details>
-  <summary>受け取った数が設定と違う</summary>
-  <div><p>届いた実数で動く。期限切れ数を入れるときに「在庫数より多い」と出るが、そのまま進めていい。<strong>違っていたことを社員に伝える。</strong>次のイベントの設定に反映される。</p></div>
-</details>
+<details><summary>画面が真っ白／古いまま</summary><div>
+<p>いちど閉じて開き直す。それでも直らなければ社員に言う。</p>
+</div></details>
 
-<div class="faqgroup">卓上注文</div>
+<div class="faqgroup">お客様に聞かれた</div>
 
-<details>
-  <summary>注文が入ると在庫は減るのか</summary>
-  <div><p><strong>減らない。</strong>注文は「持ってきてほしい」という依頼として別に記録されるだけ。在庫切れはこれまでどおり押す。</p><p>だから<strong>注文は受付であって、渡せる保証ではない。</strong>品切れなら取り消す。</p></div>
-</details>
+<details><summary>「これいつまで買える？」</summary><div>
+<p>賞味期限までは出せる。はっきり分からなければ<strong>「確認します」と言って社員に聞く</strong>。推測で答えない。</p>
+</div></details>
 
-<details>
-  <summary>QRはテーブルごとに違うのか</summary>
-  <div><p><strong>違わない。イベントに1枚。</strong>全テーブルに同じものを置く。プレイヤーが読み取ってから、テーブル番号と席番号を自分で選ぶ。</p><p>登録していないテーブル番号は選べないので、存在しない卓への誤配達は起きない。</p></div>
-</details>
+<details><summary>「注文したのにまだ来ない」</summary><div>
+<p>「注文」タブでその卓を探す。<strong>「全部見る」で担当外も出る</strong>。見つからなければ社員に言う。</p>
+</div></details>
 
-<details>
-  <summary>同じ人が何回も注文してくる</summary>
-  <div><p>制限がかかっている。<strong>1回の注文は合計5個・5種類まで。同じ席は60秒に1件。同じテーブルは10分に5件まで。</strong>それ以上は弾かれる。</p></div>
-</details>
-
-<details>
-  <summary>担当外の注文が「ほったらかし」と鳴った</summary>
-  <div><p>10分経っても誰も取っていない注文は、担当外の端末でも鳴るようにしてある。その階の端末が落ちている可能性がある。<strong>「全部見る」</strong>を押せば出てくるので、手が空いていれば代わりに届ける。</p></div>
-</details>
-
-<div class="faqgroup">通信・端末</div>
-
-<details>
-  <summary>電波が無いところで押した</summary>
-  <div><p>大丈夫。<strong>端末に貯めて、つながったときに自動で送る。</strong>「未送信が2件あります」と出て、品目には「送信待ち」と出る。</p><p><strong>ブラウザのタブを閉じると送信が止まる。</strong>電波が戻るまで開いておく。</p></div>
-</details>
-
-<details>
-  <summary>画面を閉じていいか</summary>
-  <div><p>記録するだけなら閉じていい。ただし<strong>未送信が残っているときと、注文担当の端末は開いておく。</strong>鈴は画面を開いている間しか鳴らない。</p></div>
-</details>
-
-<details>
-  <summary>「◯分前に更新」と出ている</summary>
-  <div><p>最後にサーバーから取り直した時刻。30秒ごとに自動で更新される。<strong>これが3分以上前のままなら、つながっていない。</strong>電波を確認して「更新」を押す。</p><p>この表示があるおかげで、「注文が来ていない」のか「つながっていない」のかを区別できる。</p></div>
-</details>
-
-<details>
-  <summary>二重に押してしまった</summary>
-  <div><p>問題ない。同じ記録が二重に入らないようになっている。他のスタッフが先に押していた場合も、先に押した人の記録が残る。</p></div>
-</details>
-
-<details>
-  <summary>POPが固まった／更新されない</summary>
-  <div><p>30秒ごとに自動で取り直している。止まって見えるときは<strong>ページを再読み込み</strong>する。丸一日つけっぱなしなら、一度リロードしておくと確実。</p></div>
-</details>
+<details><summary>「現金で買える？」</summary><div>
+<p>ドリンクチケットでのやり取り。金額の話が出たら社員に回す。</p>
+</div></details>
 
 <footer>
-  <p style="margin-bottom:4px"><strong>迷ったら、押す前に聞く。</strong>押してから直すほうが手間がかかる。</p>
-  <p style="margin:0">準備や設定をする人は <a href="manual-admin.html">管理者用 かんたん手引き</a>。</p>
+  <p>分からなくなったら、この手引きを開き直すか社員に聞く。<strong>勝手に判断しない。</strong></p>
+  <p>画面の写しはすべてテスト用の作り物。実在の店舗名・金額・PINは写していない。</p>
 </footer>
 
 </div>
-
 </body></html>
